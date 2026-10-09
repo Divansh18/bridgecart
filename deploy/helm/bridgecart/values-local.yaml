@@ -1,0 +1,4 @@
+stage: local
+database:
+  external: false
+  host: bridgecart-postgres

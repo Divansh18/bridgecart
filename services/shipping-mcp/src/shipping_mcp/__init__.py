@@ -1,0 +1,1 @@
+"""Shipping MCP service foundation."""

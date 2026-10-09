@@ -1,0 +1,15 @@
+stage: local
+frontend:
+  image: bridgecart/frontend:0.1.0
+backend:
+  image: bridgecart/backend:0.1.0
+mcpServers:
+  woocommerce:
+    image: bridgecart/woocommerce-mcp:0.1.0
+  inventory:
+    image: bridgecart/inventory-mcp:0.1.0
+  shipping:
+    image: bridgecart/shipping-mcp:0.1.0
+database:
+  external: false
+  host: bridgecart-postgres

@@ -1,0 +1,4 @@
+stage: production
+database:
+  external: true
+  host: replace-with-managed-postgres-host
