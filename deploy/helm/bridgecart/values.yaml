@@ -1,15 +1,45 @@
 stage: local
-frontend:
-  image: bridgecart/frontend:0.1.0
-backend:
-  image: bridgecart/backend:0.1.0
-mcpServers:
-  woocommerce:
-    image: bridgecart/woocommerce-mcp:0.1.0
-  inventory:
-    image: bridgecart/inventory-mcp:0.1.0
-  shipping:
-    image: bridgecart/shipping-mcp:0.1.0
-database:
-  external: false
-  host: bridgecart-postgres
+frontend: {enabled: false}
+backend: {enabled: false}
+mcpServers: {enabled: false}
+store:
+  enabled: true
+  host: shop.bridgecart.local
+  publicUrl: http://shop.bridgecart.local:8088
+  credentialsSecret: bridgecart-store-credentials
+  wordpress:
+    image: docker.io/library/wordpress:7.1.2-php8.3-apache
+    adminUser: bridgecart-admin
+    adminEmail: admin@bridgecart.local
+    title: BridgeCart Demo Store
+    storage: {className: local-path, size: 5Gi}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 1Gi}
+  mariadb:
+    image: docker.io/library/mariadb:11.8.9
+    database: wordpress
+    user: wordpress
+    storage: {className: local-path, size: 5Gi}
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {cpu: "1", memory: 1Gi}
+  bootstrap:
+    enabled: true
+    image: docker.io/library/wordpress:cli-2.12.0-php8.3
+    woocommerceVersion: 11.2.1
+    allowPluginUpgrade: false
+    seedDemoProduct: true
+    enableCod: true
+    enableDemoShipping: true
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 512Mi}
+  ingress:
+    className: traefik
+    tls: {enabled: false, secretName: ""}
+  networkPolicy:
+    enabled: true
+    ingressNamespace: kube-system
+    ingressPodLabels:
+      app.kubernetes.io/name: traefik

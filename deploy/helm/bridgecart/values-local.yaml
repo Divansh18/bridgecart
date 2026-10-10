@@ -1,4 +1,15 @@
 stage: local
-database:
-  external: false
-  host: bridgecart-postgres
+store:
+  host: shop.bridgecart.local
+  publicUrl: http://shop.bridgecart.local:8088
+  credentialsSecret: bridgecart-store-credentials
+  wordpress:
+    storage: {className: local-path, size: 5Gi}
+  mariadb:
+    storage: {className: local-path, size: 5Gi}
+  bootstrap:
+    seedDemoProduct: true
+    enableCod: true
+    enableDemoShipping: true
+  ingress:
+    tls: {enabled: false, secretName: ""}

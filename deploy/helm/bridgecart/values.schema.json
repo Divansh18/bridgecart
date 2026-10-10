@@ -2,37 +2,101 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["stage", "frontend", "backend", "mcpServers", "database"],
+  "required": ["stage", "frontend", "backend", "mcpServers", "store"],
   "properties": {
     "stage": { "enum": ["local", "production"] },
-    "frontend": { "$ref": "#/definitions/image" },
-    "backend": { "$ref": "#/definitions/image" },
-    "mcpServers": {
+    "frontend": { "$ref": "#/definitions/disabled" },
+    "backend": { "$ref": "#/definitions/disabled" },
+    "mcpServers": { "$ref": "#/definitions/disabled" },
+    "store": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["woocommerce", "inventory", "shipping"],
+      "required": ["enabled", "host", "publicUrl", "credentialsSecret", "wordpress", "mariadb", "bootstrap", "ingress", "networkPolicy"],
       "properties": {
-        "woocommerce": { "$ref": "#/definitions/image" },
-        "inventory": { "$ref": "#/definitions/image" },
-        "shipping": { "$ref": "#/definitions/image" }
-      }
-    },
-    "database": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["external", "host"],
-      "properties": {
-        "external": { "type": "boolean" },
-        "host": { "type": "string", "minLength": 1 }
+        "enabled": { "const": true },
+        "host": { "type": "string", "minLength": 3 },
+        "publicUrl": { "type": "string", "pattern": "^https?://[^/]+$" },
+        "credentialsSecret": { "type": "string", "minLength": 1 },
+        "wordpress": {
+          "type": "object", "additionalProperties": false,
+          "required": ["image", "adminUser", "adminEmail", "title", "storage", "resources"],
+          "properties": {
+            "image": { "$ref": "#/definitions/image" },
+            "adminUser": { "type": "string", "minLength": 1 },
+            "adminEmail": { "type": "string", "format": "email" },
+            "title": { "type": "string", "minLength": 1 },
+            "storage": { "$ref": "#/definitions/storage" },
+            "resources": { "$ref": "#/definitions/resources" }
+          }
+        },
+        "mariadb": {
+          "type": "object", "additionalProperties": false,
+          "required": ["image", "database", "user", "storage", "resources"],
+          "properties": {
+            "image": { "$ref": "#/definitions/image" },
+            "database": { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+            "user": { "type": "string", "pattern": "^[A-Za-z0-9_]+$" },
+            "storage": { "$ref": "#/definitions/storage" },
+            "resources": { "$ref": "#/definitions/resources" }
+          }
+        },
+        "bootstrap": {
+          "type": "object", "additionalProperties": false,
+          "required": ["enabled", "image", "woocommerceVersion", "allowPluginUpgrade", "seedDemoProduct", "enableCod", "enableDemoShipping", "resources"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "image": { "$ref": "#/definitions/image" },
+            "woocommerceVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "allowPluginUpgrade": { "type": "boolean" },
+            "seedDemoProduct": { "type": "boolean" },
+            "enableCod": { "type": "boolean" },
+            "enableDemoShipping": { "type": "boolean" },
+            "resources": { "$ref": "#/definitions/resources" }
+          }
+        },
+        "ingress": {
+          "type": "object", "additionalProperties": false,
+          "required": ["className", "tls"],
+          "properties": {
+            "className": { "type": "string", "minLength": 1 },
+            "tls": {
+              "type": "object", "additionalProperties": false,
+              "required": ["enabled", "secretName"],
+              "properties": { "enabled": { "type": "boolean" }, "secretName": { "type": "string" } },
+              "if": { "properties": { "enabled": { "const": true } } },
+              "then": { "properties": { "secretName": { "minLength": 1 } } }
+            }
+          }
+        },
+        "networkPolicy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["enabled", "ingressNamespace", "ingressPodLabels"],
+          "properties": {
+            "enabled": { "const": true },
+            "ingressNamespace": { "type": "string", "minLength": 1 },
+            "ingressPodLabels": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } }
+          }
+        }
       }
     }
   },
   "definitions": {
-    "image": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["image"],
-      "properties": { "image": { "type": "string", "minLength": 1 } }
+    "disabled": { "type": "object", "additionalProperties": false, "required": ["enabled"], "properties": { "enabled": { "const": false } } },
+    "image": { "type": "string", "pattern": ":[^/]+$", "not": { "pattern": ":latest$" } },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["className", "size"],
+      "properties": { "className": { "type": "string", "minLength": 1 }, "size": { "type": "string", "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$" } }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": { "requests": { "$ref": "#/definitions/cpuMemory" }, "limits": { "$ref": "#/definitions/cpuMemory" } }
+    },
+    "cpuMemory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": { "cpu": { "type": "string", "minLength": 1 }, "memory": { "type": "string", "minLength": 1 } }
     }
   }
 }

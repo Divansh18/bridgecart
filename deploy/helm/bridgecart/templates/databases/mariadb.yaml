@@ -1,0 +1,120 @@
+{{- if .Values.store.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-mariadb-data
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.store.mariadb.storage.className | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.store.mariadb.storage.size | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-mariadb-headless
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mariadb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-mariadb
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mariadb
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-mariadb
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "bridgecart.fullname" . }}-mariadb-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mariadb
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mariadb
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mariadb
+          image: {{ .Values.store.mariadb.image | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MARIADB_DATABASE
+              value: {{ .Values.store.mariadb.database | quote }}
+            - name: MARIADB_USER
+              value: {{ .Values.store.mariadb.user | quote }}
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.credentialsSecret | quote }}
+                  key: mariadb-password
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.credentialsSecret | quote }}
+                  key: mariadb-root-password
+          startupProbe:
+            exec:
+              command: [healthcheck.sh, --connect, --innodb_initialized]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [healthcheck.sh, --connect, --innodb_initialized]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: [healthcheck.sh, --connect]
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.store.mariadb.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "bridgecart.fullname" . }}-mariadb-data
+{{- end }}

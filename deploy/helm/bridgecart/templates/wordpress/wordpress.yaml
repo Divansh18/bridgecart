@@ -1,0 +1,105 @@
+{{- if .Values.store.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-wordpress-content
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.store.wordpress.storage.className | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.store.wordpress.storage.size | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-wordpress
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-wordpress
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wordpress
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wordpress
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: wordpress
+          image: {{ .Values.store.wordpress.image | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: {{ include "bridgecart.fullname" . }}-mariadb:3306
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.store.mariadb.database | quote }}
+            - name: WORDPRESS_DB_USER
+              value: {{ .Values.store.mariadb.user | quote }}
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.credentialsSecret | quote }}
+                  key: mariadb-password
+          startupProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /wp-login.php
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /wp-includes/images/blank.gif
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.store.wordpress.resources | nindent 12 }}
+          volumeMounts:
+            - name: content
+              mountPath: /var/www/html
+      volumes:
+        - name: content
+          persistentVolumeClaim:
+            claimName: {{ include "bridgecart.fullname" . }}-wordpress-content
+{{- end }}

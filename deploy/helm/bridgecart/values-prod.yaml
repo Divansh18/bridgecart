@@ -1,4 +1,17 @@
 stage: production
-database:
-  external: true
-  host: replace-with-managed-postgres-host
+store:
+  host: shop.example.com
+  publicUrl: https://shop.example.com
+  credentialsSecret: replace-with-existing-production-secret
+  wordpress:
+    adminEmail: admin@example.com
+    title: Production Store
+    storage: {className: replace-with-durable-storage-class, size: 20Gi}
+  mariadb:
+    storage: {className: replace-with-durable-storage-class, size: 20Gi}
+  bootstrap:
+    seedDemoProduct: false
+    enableCod: false
+    enableDemoShipping: false
+  ingress:
+    tls: {enabled: true, secretName: replace-with-existing-tls-secret}
