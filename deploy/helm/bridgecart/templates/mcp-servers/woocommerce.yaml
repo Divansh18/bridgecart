@@ -1,0 +1,84 @@
+{{- if .Values.woocommerceMcp.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-woocommerce-mcp
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: woocommerce-mcp
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-woocommerce-mcp
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: woocommerce-mcp
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: woocommerce-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: woocommerce-mcp
+          image: {{ .Values.woocommerceMcp.image | quote }}
+          imagePullPolicy: {{ .Values.woocommerceMcp.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8001
+          env:
+            - name: WOOCOMMERCE_MCP_HOST
+              value: 0.0.0.0
+            - name: WOOCOMMERCE_MCP_API_BASE_URL
+              value: {{ printf "http://%s-wordpress" (include "bridgecart.fullname" .) | quote }}
+            - name: WOOCOMMERCE_MCP_PUBLIC_URL
+              value: {{ .Values.store.publicUrl | quote }}
+            - name: WOOCOMMERCE_MCP_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.woocommerceMcp.apiSecret | quote }}, key: consumer-key}
+            - name: WOOCOMMERCE_MCP_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.woocommerceMcp.apiSecret | quote }}, key: consumer-secret}
+            - name: WOOCOMMERCE_MCP_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.woocommerceMcp.bearerSecret | quote }}, key: token}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 3
+            failureThreshold: 20
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.woocommerceMcp.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+{{- end }}

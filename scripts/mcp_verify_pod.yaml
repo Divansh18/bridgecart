@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bridgecart-mcp-verify
+  namespace: bridgecart
+  labels:
+    bridgecart.dev/mcp-verify: "true"
+    bridgecart.dev/temporary-owner: milestone-three
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+  containers:
+    - name: client
+      image: bridgecart/woocommerce-mcp:0.3.4
+      imagePullPolicy: IfNotPresent
+      command: [/bin/sh, -c, "sleep 1800"]
+      env:
+        - name: MCP_BEARER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bridgecart-mcp-bearer
+              key: token
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 128Mi}

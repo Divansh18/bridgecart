@@ -1,4 +1,10 @@
 stage: production
+woocommerceMcp:
+  enabled: true
+  image: registry.example.com/bridgecart/woocommerce-mcp:0.3.4
+  imagePullPolicy: Always
+  apiSecret: replace-with-existing-woocommerce-api-secret
+  bearerSecret: replace-with-existing-mcp-bearer-secret
 store:
   host: shop.example.com
   publicUrl: https://shop.example.com

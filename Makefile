@@ -1,4 +1,4 @@
-.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate
+.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify
 
 PYTHON_PROJECTS := backend services/woocommerce-mcp services/inventory-mcp services/shipping-mcp
 
@@ -45,7 +45,10 @@ helm-check:
 	helm lint deploy/helm/bridgecart -f deploy/helm/bridgecart/values-prod.yaml
 	helm template bridgecart deploy/helm/bridgecart -f deploy/helm/bridgecart/values-prod.yaml > /dev/null
 
-check: lint typecheck format-check test build helm-check
+scripts-check:
+	python3 -m py_compile scripts/provision_woocommerce_mcp.py scripts/rotate_woocommerce_mcp_key.py scripts/verify_mcp_cluster.py scripts/mcp_incluster_verify.py
+
+check: lint typecheck format-check test build helm-check scripts-check
 
 store-cluster:
 	python3 scripts/cluster_setup.py
@@ -57,7 +60,8 @@ store-images:
 	sh scripts/prepare_store_images.sh
 
 store-deploy:
-	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --wait --timeout 20m
+	@mcp_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get secret bridgecart-woocommerce-api bridgecart-mcp-bearer >/dev/null 2>&1 && echo true || echo false); \
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set woocommerceMcp.enabled=$$mcp_enabled --wait --timeout 20m
 
 store-bootstrap: store-deploy
 
@@ -69,3 +73,19 @@ store-smoke:
 
 store-admin-rotate:
 	python3 scripts/rotate_local_admin.py
+
+mcp-secrets:
+	python3 scripts/provision_woocommerce_mcp.py
+
+mcp-image:
+	docker build -t bridgecart/woocommerce-mcp:0.3.4 services/woocommerce-mcp
+	k3d image import bridgecart/woocommerce-mcp:0.3.4 -c bridgecart
+
+mcp-deploy: mcp-secrets mcp-image
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --wait --timeout 20m
+
+mcp-status:
+	kubectl --context k3d-bridgecart -n bridgecart get deployment/bridgecart-woocommerce-mcp service/bridgecart-woocommerce-mcp networkpolicy/bridgecart-woocommerce-mcp
+
+mcp-verify:
+	python3 scripts/verify_mcp_cluster.py

@@ -1,0 +1,41 @@
+{{- if and .Values.woocommerceMcp.enabled .Values.store.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-woocommerce-mcp
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: woocommerce-mcp
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: gateway
+        {{- if eq .Values.stage "local" }}
+        - podSelector:
+            matchLabels:
+              bridgecart.dev/mcp-verify: "true"
+        {{- end }}
+      ports:
+        - {protocol: TCP, port: 8001}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: wordpress
+      ports:
+        - {protocol: TCP, port: 80}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+{{- end }}

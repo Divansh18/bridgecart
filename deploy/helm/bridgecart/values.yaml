@@ -2,6 +2,15 @@ stage: local
 frontend: {enabled: false}
 backend: {enabled: false}
 mcpServers: {enabled: false}
+woocommerceMcp:
+  enabled: false
+  image: bridgecart/woocommerce-mcp:0.3.4
+  imagePullPolicy: IfNotPresent
+  apiSecret: bridgecart-woocommerce-api
+  bearerSecret: bridgecart-mcp-bearer
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
 store:
   enabled: true
   host: shop.bridgecart.local

@@ -1,4 +1,6 @@
 stage: local
+woocommerceMcp:
+  enabled: true
 store:
   host: shop.bridgecart.local
   publicUrl: http://shop.bridgecart.local:8088

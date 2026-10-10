@@ -54,6 +54,12 @@ spec:
           podSelector:
             matchLabels:
               {{- toYaml .Values.store.networkPolicy.ingressPodLabels | nindent 14 }}
+        {{- if .Values.woocommerceMcp.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: woocommerce-mcp
+        {{- end }}
       ports:
         - protocol: TCP
           port: 80
