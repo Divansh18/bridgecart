@@ -8,7 +8,8 @@
     "backend",
     "mcpServers",
     "store",
-    "woocommerceMcp"
+    "woocommerceMcp",
+    "postgres"
   ],
   "properties": {
     "stage": {
@@ -21,7 +22,126 @@
       "$ref": "#/definitions/disabled"
     },
     "backend": {
-      "$ref": "#/definitions/disabled"
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "imagePullPolicy",
+        "host",
+        "databaseSecret",
+        "initialAdminSecret",
+        "cookieSecure",
+        "cookieSameSite",
+        "corsOrigins",
+        "ingress",
+        "resources",
+        "migrationResources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "imagePullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 3
+        },
+        "databaseSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initialAdminSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cookieSecure": {
+          "type": "boolean"
+        },
+        "cookieSameSite": {
+          "enum": [
+            "lax",
+            "strict",
+            "none"
+          ]
+        },
+        "corsOrigins": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "className",
+            "namespace",
+            "podLabels",
+            "tls"
+          ],
+          "properties": {
+            "className": {
+              "type": "string",
+              "minLength": 1
+            },
+            "namespace": {
+              "type": "string",
+              "minLength": 1
+            },
+            "podLabels": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled",
+                "secretName"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "secretName": {
+                  "type": "string"
+                }
+              },
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "secretName": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "migrationResources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
     },
     "mcpServers": {
       "$ref": "#/definitions/disabled"
@@ -278,6 +398,66 @@
           "$ref": "#/definitions/resources"
         }
       }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "imagePullPolicy",
+        "database",
+        "user",
+        "credentialsSecret",
+        "storage",
+        "networkPolicy",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "imagePullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "database": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$"
+        },
+        "credentialsSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "storage": {
+          "$ref": "#/definitions/storage"
+        },
+        "networkPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "const": true
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
     }
   },
   "definitions": {
@@ -352,5 +532,31 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "backend": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "postgres": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

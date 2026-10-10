@@ -2,6 +2,33 @@
 {{- .Chart.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "bridgecart.backendEnv" -}}
+- name: BRIDGECART_DATABASE_URL
+  valueFrom:
+    secretKeyRef: {name: {{ .Values.backend.databaseSecret | quote }}, key: database-url}
+- {name: BRIDGECART_STAGE, value: {{ .Values.stage | quote }}}
+- {name: BRIDGECART_COOKIE_SECURE, value: {{ .Values.backend.cookieSecure | quote }}}
+- {name: BRIDGECART_COOKIE_SAMESITE, value: {{ .Values.backend.cookieSameSite | quote }}}
+- {name: BRIDGECART_CORS_ORIGINS, value: {{ .Values.backend.corsOrigins | quote }}}
+{{- end -}}
+
+{{- define "bridgecart.backendDbEgress" -}}
+- to:
+    - podSelector:
+        matchLabels:
+          {{- include "bridgecart.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: postgres
+  ports: [{protocol: TCP, port: 5432}]
+- to:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: kube-system}
+      podSelector:
+        matchLabels: {k8s-app: kube-dns}
+  ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+{{- end -}}
+
 {{- define "bridgecart.fullname" -}}
 {{- .Release.Name | trunc 52 | trimSuffix "-" -}}
 {{- end -}}

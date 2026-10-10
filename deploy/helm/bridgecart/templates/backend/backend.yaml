@@ -1,0 +1,91 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-backend
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  ports:
+    - {name: http, port: 8000, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-backend
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: backend
+          image: {{ .Values.backend.image | quote }}
+          imagePullPolicy: {{ .Values.backend.imagePullPolicy }}
+          ports:
+            - {name: http, containerPort: 8000}
+          env:
+            {{- include "bridgecart.backendEnv" . | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-api
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.backend.ingress.className | quote }}
+  {{- if .Values.backend.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.backend.host | quote }}]
+      secretName: {{ .Values.backend.ingress.tls.secretName | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.backend.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "bridgecart.fullname" . }}-backend
+                port: {name: http}
+{{- end }}

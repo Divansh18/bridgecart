@@ -1,4 +1,20 @@
 stage: production
+backend:
+  enabled: true
+  image: registry.example.com/bridgecart/backend:0.4.0
+  imagePullPolicy: Always
+  host: api.example.com
+  databaseSecret: replace-with-existing-postgres-secret
+  initialAdminSecret: replace-with-existing-initial-admin-secret
+  cookieSecure: true
+  cookieSameSite: lax
+  corsOrigins: https://app.example.com
+  ingress:
+    tls: {enabled: true, secretName: replace-with-existing-api-tls-secret}
+postgres:
+  enabled: true
+  credentialsSecret: replace-with-existing-postgres-secret
+  storage: {className: replace-with-durable-storage-class, size: 20Gi}
 woocommerceMcp:
   enabled: true
   image: registry.example.com/bridgecart/woocommerce-mcp:0.3.4

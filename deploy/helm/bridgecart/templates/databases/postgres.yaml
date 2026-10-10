@@ -1,0 +1,87 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-postgres-data
+  annotations: {helm.sh/resource-policy: keep}
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.postgres.storage.className | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage.size | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-postgres
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+  ports:
+    - {name: postgres, port: 5432, targetPort: postgres}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-postgres
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "bridgecart.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image | quote }}
+          imagePullPolicy: {{ .Values.postgres.imagePullPolicy }}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          env:
+            - {name: POSTGRES_DB, value: {{ .Values.postgres.database | quote }}}
+            - {name: POSTGRES_USER, value: {{ .Values.postgres.user | quote }}}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.postgres.credentialsSecret | quote }}, key: password}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, {{ .Values.postgres.user | quote }}, -d, {{ .Values.postgres.database | quote }}]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, {{ .Values.postgres.user | quote }}, -d, {{ .Values.postgres.database | quote }}]
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, {{ .Values.postgres.user | quote }}, -d, {{ .Values.postgres.database | quote }}]
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "bridgecart.fullname" . }}-postgres-data
+{{- end }}

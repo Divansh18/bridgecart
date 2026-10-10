@@ -1,6 +1,38 @@
 stage: local
 frontend: {enabled: false}
-backend: {enabled: false}
+backend:
+  enabled: false
+  image: bridgecart/backend:0.4.0
+  imagePullPolicy: IfNotPresent
+  host: api.bridgecart.local
+  databaseSecret: bridgecart-postgres-credentials
+  initialAdminSecret: bridgecart-initial-admin
+  cookieSecure: false
+  cookieSameSite: lax
+  corsOrigins: http://localhost:5173
+  ingress:
+    className: traefik
+    namespace: kube-system
+    podLabels: {app.kubernetes.io/name: traefik}
+    tls: {enabled: false, secretName: ""}
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+  migrationResources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+postgres:
+  enabled: false
+  image: docker.io/library/postgres:17.11-bookworm
+  imagePullPolicy: IfNotPresent
+  database: bridgecart
+  user: bridgecart
+  credentialsSecret: bridgecart-postgres-credentials
+  storage: {className: local-path, size: 5Gi}
+  networkPolicy: {enabled: true}
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
 mcpServers: {enabled: false}
 woocommerceMcp:
   enabled: false

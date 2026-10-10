@@ -1,0 +1,71 @@
+{{- if and .Values.postgres.enabled .Values.postgres.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-team-deny
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [postgres, backend, backend-migration]
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-postgres-access
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" . | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: [backend, backend-migration]
+      ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-backend-access
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.backend.ingress.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.backend.ingress.podLabels | nindent 14 }}
+      ports: [{protocol: TCP, port: 8000}]
+  egress:
+    {{- include "bridgecart.backendDbEgress" . | nindent 4 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-backend-migration-egress
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend-migration
+  policyTypes: [Egress]
+  egress:
+    {{- include "bridgecart.backendDbEgress" . | nindent 4 }}
+{{- end }}

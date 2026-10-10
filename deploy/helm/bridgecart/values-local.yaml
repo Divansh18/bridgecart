@@ -1,4 +1,14 @@
 stage: local
+backend:
+  enabled: true
+  host: api.bridgecart.local
+  cookieSecure: false
+  cookieSameSite: lax
+  ingress:
+    tls: {enabled: false, secretName: ""}
+postgres:
+  enabled: true
+  storage: {className: local-path, size: 5Gi}
 woocommerceMcp:
   enabled: true
 store:
