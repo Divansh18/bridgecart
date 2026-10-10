@@ -1,4 +1,4 @@
-.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check check
+.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate
 
 PYTHON_PROJECTS := backend services/woocommerce-mcp services/inventory-mcp services/shipping-mcp
 
@@ -46,3 +46,26 @@ helm-check:
 	helm template bridgecart deploy/helm/bridgecart -f deploy/helm/bridgecart/values-prod.yaml > /dev/null
 
 check: lint typecheck format-check test build helm-check
+
+store-cluster:
+	python3 scripts/cluster_setup.py
+
+store-secrets:
+	python3 scripts/store_secrets.py
+
+store-images:
+	sh scripts/prepare_store_images.sh
+
+store-deploy:
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --wait --timeout 20m
+
+store-bootstrap: store-deploy
+
+store-status:
+	kubectl --context k3d-bridgecart -n bridgecart get pods,pvc,svc,ingress,networkpolicy,job
+
+store-smoke:
+	python3 scripts/store_smoke.py
+
+store-admin-rotate:
+	python3 scripts/rotate_local_admin.py

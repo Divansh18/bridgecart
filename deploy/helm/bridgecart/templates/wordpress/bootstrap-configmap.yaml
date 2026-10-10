@@ -1,0 +1,15 @@
+{{- if and .Values.store.enabled .Values.store.bootstrap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-bootstrap
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+data:
+  bootstrap.sh: |
+    {{- .Files.Get "files/bootstrap.sh" | nindent 4 }}
+  configure.php: |
+    {{- .Files.Get "files/configure.php" | nindent 4 }}
+  install.php: |
+    {{- .Files.Get "files/install.php" | nindent 4 }}
+{{- end }}

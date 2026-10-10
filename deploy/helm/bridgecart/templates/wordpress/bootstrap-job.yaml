@@ -1,0 +1,90 @@
+{{- if and .Values.store.enabled .Values.store.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-store-bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: Never
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "bridgecart.selectorLabels" . | nindent 18 }}
+                  app.kubernetes.io/component: wordpress
+              topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsUser: 33
+        runAsGroup: 33
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: wp-cli
+          image: {{ .Values.store.bootstrap.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, /bootstrap/bootstrap.sh]
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            {{- include "bridgecart.wordpressEnv" . | nindent 12 }}
+            - name: HOME
+              value: /tmp
+            - name: WP_CLI_CACHE_DIR
+              value: /tmp/wp-cli-cache
+            - name: STORE_URL
+              value: {{ .Values.store.publicUrl | quote }}
+            - name: STORE_TITLE
+              value: {{ .Values.store.wordpress.title | quote }}
+            - name: STORE_ADMIN_USER
+              value: {{ .Values.store.wordpress.adminUser | quote }}
+            - name: STORE_ADMIN_EMAIL
+              value: {{ .Values.store.wordpress.adminEmail | quote }}
+            - name: WOOCOMMERCE_VERSION
+              value: {{ .Values.store.bootstrap.woocommerceVersion | quote }}
+            - name: ALLOW_PLUGIN_UPGRADE
+              value: {{ .Values.store.bootstrap.allowPluginUpgrade | quote }}
+            - name: SEED_DEMO_PRODUCT
+              value: {{ .Values.store.bootstrap.seedDemoProduct | quote }}
+            - name: ENABLE_COD
+              value: {{ .Values.store.bootstrap.enableCod | quote }}
+            - name: ENABLE_DEMO_SHIPPING
+              value: {{ .Values.store.bootstrap.enableDemoShipping | quote }}
+          resources:
+            {{- toYaml .Values.store.bootstrap.resources | nindent 12 }}
+          volumeMounts:
+            - name: content
+              mountPath: /var/www/html
+            - name: bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+            - name: admin-password
+              mountPath: /run/bridgecart-secrets
+              readOnly: true
+      volumes:
+        - name: content
+          persistentVolumeClaim:
+            claimName: {{ include "bridgecart.fullname" . }}-wordpress-content
+        - name: bootstrap
+          configMap:
+            name: {{ include "bridgecart.fullname" . }}-bootstrap
+        - name: admin-password
+          secret:
+            secretName: {{ .Values.store.credentialsSecret | quote }}
+            items:
+              - key: wordpress-admin-password
+                path: wordpress-admin-password
+{{- end }}
