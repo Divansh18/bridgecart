@@ -12,5 +12,6 @@ store:
     enableCod: true
     enableDemoShipping: true
     makeStoreLive: true
+    makeShopHomepage: true
   ingress:
     tls: {enabled: false, secretName: ""}

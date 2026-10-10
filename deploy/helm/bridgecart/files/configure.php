@@ -102,6 +102,17 @@ if (getenv('SEED_DEMO_PRODUCT') === 'true') {
     }
 }
 
+if (getenv('MAKE_SHOP_HOMEPAGE') === 'true' && get_option('bridgecart_demo_homepage_initialized') !== 'yes') {
+    $shop_page_id = (int) get_option('woocommerce_shop_page_id', 0);
+    if (!$shop_page_id || get_post_type($shop_page_id) !== 'page' || get_post_status($shop_page_id) !== 'publish') {
+        throw new RuntimeException('Cannot set the demo homepage: WooCommerce Shop page is missing or unpublished');
+    }
+    update_option('show_on_front', 'page');
+    update_option('page_on_front', $shop_page_id);
+    update_option('bridgecart_demo_homepage_initialized', 'yes');
+    echo "Demo homepage set to Shop\n";
+}
+
 if (getenv('MAKE_STORE_LIVE') === 'true' && get_option('bridgecart_demo_visibility_initialized') !== 'yes') {
     update_option('woocommerce_coming_soon', 'no');
     update_option('bridgecart_demo_visibility_initialized', 'yes');
