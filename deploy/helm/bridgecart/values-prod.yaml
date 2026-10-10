@@ -13,5 +13,6 @@ store:
     seedDemoProduct: false
     enableCod: false
     enableDemoShipping: false
+    makeStoreLive: false
   ingress:
     tls: {enabled: true, secretName: replace-with-existing-tls-secret}

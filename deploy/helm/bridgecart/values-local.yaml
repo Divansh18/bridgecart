@@ -11,5 +11,6 @@ store:
     seedDemoProduct: true
     enableCod: true
     enableDemoShipping: true
+    makeStoreLive: true
   ingress:
     tls: {enabled: false, secretName: ""}

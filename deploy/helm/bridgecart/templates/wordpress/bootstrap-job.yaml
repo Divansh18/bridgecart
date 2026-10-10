@@ -63,6 +63,8 @@ spec:
               value: {{ .Values.store.bootstrap.enableCod | quote }}
             - name: ENABLE_DEMO_SHIPPING
               value: {{ .Values.store.bootstrap.enableDemoShipping | quote }}
+            - name: MAKE_STORE_LIVE
+              value: {{ .Values.store.bootstrap.makeStoreLive | quote }}
           resources:
             {{- toYaml .Values.store.bootstrap.resources | nindent 12 }}
           volumeMounts:

@@ -42,7 +42,7 @@
         },
         "bootstrap": {
           "type": "object", "additionalProperties": false,
-          "required": ["enabled", "image", "woocommerceVersion", "allowPluginUpgrade", "seedDemoProduct", "enableCod", "enableDemoShipping", "resources"],
+          "required": ["enabled", "image", "woocommerceVersion", "allowPluginUpgrade", "seedDemoProduct", "enableCod", "enableDemoShipping", "makeStoreLive", "resources"],
           "properties": {
             "enabled": { "type": "boolean" },
             "image": { "$ref": "#/definitions/image" },
@@ -51,6 +51,7 @@
             "seedDemoProduct": { "type": "boolean" },
             "enableCod": { "type": "boolean" },
             "enableDemoShipping": { "type": "boolean" },
+            "makeStoreLive": { "type": "boolean" },
             "resources": { "$ref": "#/definitions/resources" }
           }
         },

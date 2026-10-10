@@ -101,3 +101,9 @@ if (getenv('SEED_DEMO_PRODUCT') === 'true') {
         echo "Demo product $sku already exists; preserving it\n";
     }
 }
+
+if (getenv('MAKE_STORE_LIVE') === 'true' && get_option('bridgecart_demo_visibility_initialized') !== 'yes') {
+    update_option('woocommerce_coming_soon', 'no');
+    update_option('bridgecart_demo_visibility_initialized', 'yes');
+    echo "Demo store visibility set to live\n";
+}
