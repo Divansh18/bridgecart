@@ -35,4 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+      - run: sh -n deploy/helm/bridgecart/files/bootstrap.sh && sh -n scripts/prepare_store_images.sh && python3 -m py_compile scripts/*.py
+      - run: docker run --rm --entrypoint php -v "$PWD/deploy/helm/bridgecart/files:/bootstrap:ro" docker.io/library/wordpress:cli-2.12.0-php8.3 -l /bootstrap/install.php && docker run --rm --entrypoint php -v "$PWD/deploy/helm/bridgecart/files:/bootstrap:ro" docker.io/library/wordpress:cli-2.12.0-php8.3 -l /bootstrap/configure.php
       - run: make helm-check

@@ -1,30 +1,31 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway for WooCommerce, intended for Kubernetes. This first milestone is a runnable project foundation, **not a deployable gateway**.
+BridgeCart is a team MCP gateway project for WooCommerce. Milestone two runs a **single-replica WooCommerce demo store** on local k3d: WordPress, MariaDB, Traefik Ingress, PVCs, NetworkPolicies, and an idempotent bootstrap Job. The gateway, authentication, chat, and MCP business tools are still unimplemented.
+
+## Local store
+
+Install Docker Desktop, k3d, kubectl, Helm, and Python 3.12+. From a fresh checkout:
+
+```sh
+make store-cluster
+make store-secrets
+make store-deploy
+make store-status
+make store-smoke
+```
+
+Add `127.0.0.1 shop.bridgecart.local` to your hosts file if it is absent. Open [the storefront](http://shop.bridgecart.local:8088/) and [WordPress admin](http://shop.bridgecart.local:8088/wp-admin/). The admin username is `bridgecart-admin`; retrieve its generated password privately from the local Kubernetes Secret as described in [local development](docs/local-development.md). No credentials are stored in this repository.
+
+`make store-cluster` checks for an existing cluster and occupied ports before creating anything. It never deletes a cluster. `make store-secrets` preserves an existing Secret. `make store-deploy` runs the Helm bootstrap hook; `make store-bootstrap` runs it again to check idempotency. Optional `make store-images` imports the pinned images into k3d when node pulls are unavailable.
+
+The demo product is **BridgeCart Demo Mug**, SKU `BRIDGECART-DEMO-001`, priced at ₹499. India free shipping and cash on delivery support a test checkout. See [the demo checklist](docs/demo-checklist.md).
 
 ## Repository
 
-- `frontend/`: React, TypeScript, Vite, Tailwind CSS and shadcn/ui landing screen.
-- `backend/`: FastAPI configuration, JSON logging, database sessions, Alembic, and health checks.
-- `services/`: three independent, empty MCP servers using Streamable HTTP.
-- `deploy/`: Helm chart metadata, values and schema, plus a local k3d cluster definition. The chart emits no workloads yet.
+- `frontend/`: React/Vite landing screen from milestone one; not deployed by this chart.
+- `backend/`: FastAPI foundation from milestone one; not deployed by this chart.
+- `services/`: three empty MCP servers from milestone one; not deployed by this chart.
+- `deploy/helm/bridgecart/`: one chart for local k3d and production k3s; values files select environment details.
+- `deploy/k3d/cluster.yaml`: pinned local k3s cluster with Traefik and host port 8088.
 
-## Quick start
-
-Install Node 22, Python 3.12, uv, PostgreSQL, and optionally Helm. Copy `.env.example` to `.env` and set `BRIDGECART_DATABASE_URL` to a local PostgreSQL URL using `postgresql+asyncpg`. Export those variables in your shell before starting the backend (or copy `.env` into `backend/.env`).
-
-```sh
-make install
-make frontend
-make backend
-```
-
-Visit `http://localhost:5173`. The API is at `http://localhost:8000`; `/health/live` returns 200 while the process runs, and `/health/ready` returns 200 only when PostgreSQL responds to `SELECT 1`. Without PostgreSQL it returns 503.
-
-The MCP servers can be started separately with `make mcp-woocommerce`, `make mcp-inventory`, and `make mcp-shipping`. They listen on loopback ports 8001, 8002, and 8003 at `/mcp` and intentionally advertise zero tools.
-
-Run `make check` for lint, type, format, test, frontend build and Helm scaffold validation. See [local development](docs/local-development.md) for exact setup and [architecture](docs/architecture.md) for boundaries.
-
-## Milestone boundary
-
-Authentication, membership, API keys, gateway routing and upstream authorization, audit persistence, chat execution, WooCommerce/inventory/shipping tools, WordPress provisioning, and Kubernetes workload manifests are planned for milestone two. No real secrets belong in this repository.
+Run `make check` for existing frontend/backend/MCP checks and Helm lint/template. The local-path PVCs survive pod replacement and are retained on Helm uninstall, but are tied to their k3d node and do not replace backups. Read [architecture](docs/architecture.md), [production](docs/production.md), and the [runbook](docs/runbook.md) before upgrades or cleanup.
