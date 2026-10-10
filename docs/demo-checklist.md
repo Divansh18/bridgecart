@@ -23,3 +23,13 @@ An initial isolated `bridgecart-freshcheck` install completed, but a guest saw W
 - Credential check: both Job logs were compared in memory against the raw and base64-encoded values of all 11 Secret keys. Neither log contained an exact match; no Secret values were printed during the check.
 - Cleanup: every resource in each verification namespace was checked against its temporary release or namespace before uninstall. Both namespaces, their Secrets, test PVCs and backing PVs, and Ingresses were removed. The original `bridgecart` release remained deployed at revision 6; its Secret and PVC identities were unchanged, and its demo product and order #12 remained present.
 - Project checks: `make check` passed, including local and production Helm lint/template. PHP lint passed for both bootstrap PHP files.
+
+## Existing local store activation — 2026-10-10
+
+The existing `bridgecart` release was still at Helm revision 6 and had not received the local Live setting. WordPress reported `woocommerce_coming_soon=yes`, `show_on_front=posts`, and an assigned Shop page ID of 5. A logged-out Chrome session saw the Coming soon page at `/shop/`; demo product SKU `BRIDGECART-DEMO-001` and order #12 were present in the database.
+
+- Added local-only `bootstrap.makeShopHomepage: true` and a one-time Shop homepage assignment. Production values keep both this and `makeStoreLive` false.
+- `make store-deploy` upgraded the existing release to revision 7. The Job preserved WordPress and the demo product, set Shop as homepage, and made the store Live. No raw or base64-encoded Secret value matched the Job log.
+- In a logged-out Chrome session, both `/` and `/shop/` displayed **BridgeCart Demo Mug** with an Add to cart button, without the Coming soon page. A guest used India free shipping and cash on delivery to place order **#15**.
+- `make store-bootstrap` upgraded to revision 8. The Job preserved the existing admin and product and did not reapply the one-time homepage or visibility changes. WordPress still reported `woocommerce_coming_soon=no`, `page_on_front=5`, and `woocommerce_shop_page_id=5`; the SKU count was **1**, and orders #12 and #15 remained present.
+- The existing Secret and both PVC identities were unchanged. `make store-smoke`, `make check`, local and production Helm lint/template, and PHP lint passed. No reinstall, Secret rotation, PVC replacement, or production deployment occurred.
