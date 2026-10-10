@@ -1,6 +1,6 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway project for WooCommerce. Milestone two runs a **single-replica WooCommerce demo store** on local k3d: WordPress, MariaDB, Traefik Ingress, PVCs, NetworkPolicies, and an idempotent bootstrap Job. The gateway, authentication, chat, and MCP business tools are still unimplemented.
+BridgeCart is a team MCP gateway project for WooCommerce. Milestone three adds an internal **WooCommerce MCP service** with five REST-backed tools to the single-replica local store. The gateway, team authentication, dashboard features, and chat remain unimplemented.
 
 ## Local store
 
@@ -12,6 +12,8 @@ make store-secrets
 make store-deploy
 make store-status
 make store-smoke
+make mcp-deploy  # creates dedicated API and bearer Secrets, builds/imports image, upgrades Helm
+make mcp-verify  # temporary in-cluster client checks auth and tool catalog
 ```
 
 Add `127.0.0.1 shop.bridgecart.local` to your hosts file if it is absent. Open [the storefront](http://shop.bridgecart.local:8088/) and [WordPress admin](http://shop.bridgecart.local:8088/wp-admin/). The admin username is `bridgecart-admin`; retrieve its generated password privately from the local Kubernetes Secret as described in [local development](docs/local-development.md). No credentials are stored in this repository.
@@ -25,8 +27,10 @@ The local demo is made public and uses Shop as its homepage on its first bootstr
 
 - `frontend/`: React/Vite landing screen from milestone one; not deployed by this chart.
 - `backend/`: FastAPI foundation from milestone one; not deployed by this chart.
-- `services/`: three empty MCP servers from milestone one; not deployed by this chart.
+- `services/`: WooCommerce MCP is deployed internally; inventory and shipping MCP remain disabled.
 - `deploy/helm/bridgecart/`: one chart for local k3d and production k3s; values files select environment details.
 - `deploy/k3d/cluster.yaml`: pinned local k3s cluster with Traefik and host port 8088.
 
 Run `make check` for existing frontend/backend/MCP checks and Helm lint/template. The local-path PVCs survive pod replacement and are retained on Helm uninstall, but are tied to their k3d node and do not replace backups. Read [architecture](docs/architecture.md), [production](docs/production.md), and the [runbook](docs/runbook.md) before upgrades or cleanup.
+
+The MCP Service has no public Ingress. Its WooCommerce REST key is separate from the bearer token that protects Streamable HTTP. See [local MCP setup](docs/local-development.md#mcp-service), [tool behavior](docs/architecture.md#woocommerce-mcp-tools), and [verification results](docs/demo-checklist.md#milestone-three-verification--2026-10-10).

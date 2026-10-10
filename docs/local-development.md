@@ -41,3 +41,21 @@ WooCommerce starts a fresh store in Coming soon mode. Local values set `bootstra
 The local-path volumes bind to a k3d node. Pod replacement on that node retains data; deleting the cluster or PVC can destroy it. Keep backups of both MariaDB and WordPress content for any data you care about. Helm uninstall retains the two PVC objects through `helm.sh/resource-policy: keep`; it does not retain the k3d cluster. Do not delete the cluster or PVCs as a routine cleanup step.
 
 For foundation development, Node 22, Python 3.12, uv, and PostgreSQL are still required. Copy `.env.example` to `.env`, set `BRIDGECART_DATABASE_URL`, export it, then run `make install`, `make frontend`, and `make backend`. These services are not part of the store chart.
+
+## MCP service
+
+After the store is ready, run:
+
+```sh
+make mcp-secrets  # repeatable; creates dedicated API and bearer Secrets, then binds API key to shop_manager
+make mcp-image    # builds pinned 0.3.4 image and imports it to k3d
+make mcp-deploy   # upgrades the existing release without resetting the store
+make mcp-status
+make mcp-verify   # temporary labeled in-cluster client; removes its own Pod after checks
+```
+
+`make mcp-deploy` also runs the first two steps. A fresh `make store-deploy` installs the store with MCP disabled until both MCP Secrets exist, so first bootstrap can complete. Subsequent store upgrades keep MCP enabled once those Secrets exist. The local provisioner is fixed to context `k3d-bridgecart` and namespace `bridgecart`. It reuses Secrets on repeat runs and only creates a dedicated `bridgecart-mcp` shop-manager account and `read_write` WooCommerce key when absent. It does not use the admin password. It passes key material to WordPress PHP on stdin, uses file-backed Kubernetes Secret creation, and prints only created/existing state. It never prints key, secret, or bearer values. For an intentional local API-key rotation, use `python3 scripts/rotate_woocommerce_mcp_key.py`; it leaves the WordPress admin credential and MCP bearer untouched. Do not put these values in Helm files or command arguments.
+
+The internal MCP URL is `http://bridgecart-woocommerce-mcp:8001/mcp` inside the cluster; it has no public port. The public storefront stays [shop.bridgecart.local:8088](http://shop.bridgecart.local:8088/). The REST client reaches `http://bridgecart-wordpress` inside Kubernetes and signs against WordPress's configured public host as WooCommerce expects. The bearer token authenticates MCP transport callers, while the WooCommerce key authenticates REST calls from the service. Keep them distinct. For manual tool calls, use the temporary verification Pod and `scripts/mcp_incluster_verify.py`; it reads the bearer from a Secret environment variable without printing it. `make mcp-verify` checks MCP initialization, the five-tool catalog, a product listing, and missing/invalid bearer rejection. `python3 scripts/verify_mcp_cluster.py <order-id>` additionally checks today's order list and that specific order, then cleans up its Pod.
+
+Test artifacts from the 2026-10-10 verification are product **#17**, “BridgeCart MCP Milestone Three Test Mug” (₹129), and guest cash-on-delivery order **#18**. They remain in the store intentionally; do not remove other products or orders while cleaning up verification Pods. The local test product is visible to guests at `/product/bridgecart-mcp-milestone-three-test-mug/`.
