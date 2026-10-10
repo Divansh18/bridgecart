@@ -19,6 +19,7 @@ Add `127.0.0.1 shop.bridgecart.local` to your hosts file if it is absent. Open [
 `make store-cluster` checks for an existing cluster and occupied ports before creating anything. It never deletes a cluster. `make store-secrets` preserves an existing Secret. `make store-deploy` runs the Helm bootstrap hook; `make store-bootstrap` runs it again to check idempotency. Optional `make store-images` imports the pinned images into k3d when node pulls are unavailable.
 
 The demo product is **BridgeCart Demo Mug**, SKU `BRIDGECART-DEMO-001`, priced at ₹499. India free shipping and cash on delivery support a test checkout. See [the demo checklist](docs/demo-checklist.md).
+The local demo is made public on its first bootstrap; production values leave WooCommerce's site visibility under administrator control.
 
 ## Repository
 

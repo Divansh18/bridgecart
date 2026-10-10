@@ -4,6 +4,8 @@ The milestone-two store is isolated from the unfinished gateway. Traefik routes 
 
 The same Helm templates render for local k3d and production k3s. Local and production values set DNS, URL, storage class/size, TLS, Secret name, and demo behavior. Frontend, backend, and MCP workloads are explicitly disabled. The k3s Traefik, embedded network policy controller, and local-path provisioner are cluster facilities, not chart subcomponents.
 
+WooCommerce starts a fresh store in Coming soon mode. Local demo values request a one-time switch to Live during bootstrap; a WordPress option records that BridgeCart made this initial change so later bootstrap runs do not override an administrator's visibility choice. Production values do not request the switch.
+
 NetworkPolicies default-deny ingress and egress for store pods, then allow Traefik to reach WordPress on TCP 80, WordPress and bootstrap to reach MariaDB on TCP 3306, and WordPress/bootstrap to reach CoreDNS on TCP/UDP 53. Bootstrap alone can reach public TCP 443 to download WooCommerce. MariaDB has no permitted egress and no public Service, NodePort, or Ingress. Kubelet probes are node-originated. See the [runbook](runbook.md) for a live denied-connection check.
 
 WordPress liveness reads a static core image and stays healthy during a temporary database outage. Readiness requests the dynamic login page, which depends on WordPress and MariaDB. MariaDB startup/readiness use its official `healthcheck.sh --connect --innodb_initialized`; liveness checks the local connection. The bootstrap Job has a 900-second deadline and one retry. Helm waits for it during deployment.
