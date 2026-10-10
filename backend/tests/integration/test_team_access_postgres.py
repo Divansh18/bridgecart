@@ -126,6 +126,12 @@ async def test_team_access_against_migrated_postgres(
             assert own_key_response.status_code == 201
             raw_key = own_key_response.json()["key"]
             key_id = own_key_response.json()["id"]
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://test",
+                headers={"Authorization": "Bearer " + raw_key},
+            ) as key_only:
+                assert (await key_only.get("/auth/me")).status_code == 401
             own_list = (await member.get("/api-keys")).json()
             assert len(own_list) == 1 and "key" not in own_list[0]
             second_invite = await admin.post(
