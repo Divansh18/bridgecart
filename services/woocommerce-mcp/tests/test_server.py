@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -44,6 +44,9 @@ def test_configuration_rejects_url_credentials_and_paths() -> None:
 def test_validation_and_kolkata_boundaries() -> None:
     assert pagination(1, 50) == {"page": "1", "per_page": "50"}
     assert product_input(" Example ", "12.50")["regular_price"] == "12.50"
+    for name in ("", "   ", "x" * 201):
+        with pytest.raises(ToolError):
+            product_input(name, "1.00")
     for price in ("-1", "NaN", "Inf", "3.141", "free", "1e2", " 2"):
         with pytest.raises(ToolError):
             product_input("Example", price)
@@ -67,6 +70,18 @@ def test_validation_and_kolkata_boundaries() -> None:
     }
     with pytest.raises(ToolError):
         order_dates(True, "2026-10-09", None)
+    assert (
+        order_dates(True, None, None, datetime(2026, 10, 9, 18, 29, 59, tzinfo=UTC))["after"]
+        == "2026-10-08T18:29:59"
+    )
+    assert (
+        order_dates(True, None, None, datetime(2026, 10, 9, 18, 30, tzinfo=UTC))["after"]
+        == "2026-10-09T18:29:59"
+    )
+    with pytest.raises(ToolError):
+        order_dates(False, "2026-10-11", "2026-10-10")
+    with pytest.raises(ToolError):
+        order_dates(False, "not-a-date", None)
 
 
 @pytest.mark.asyncio
@@ -106,23 +121,140 @@ async def test_tool_catalog_and_safe_order_projection() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rest_errors_and_uncertain_write() -> None:
-    for status in (401, 404, 503):
-        wc = WooClient(
-            settings(),
-            httpx.MockTransport(lambda _, status=status: httpx.Response(status, text="private")),
-        )
-        with pytest.raises(StoreError) as caught:
-            await wc.request("GET", "/wp-json/wc/v3/orders/1")
-        assert "private" not in str(caught.value)
-        await wc.close()
+async def test_list_tools_forward_bounded_filters_and_hide_customer_data() -> None:
+    requests: list[httpx.Request] = []
 
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/products"):
+            return httpx.Response(200, json=[], headers={"X-WP-Total": "9"})
+        return httpx.Response(
+            200,
+            json=[{"id": 12, "status": "processing", "billing": {"email": "private@example.com"}}],
+            headers={"X-WP-Total": "1"},
+        )
+
+    wc = WooClient(settings(), httpx.MockTransport(respond))
+    async with Client(create_mcp(wc)) as client:
+        products = await client.call_tool(
+            "list_products", {"page": 3, "per_page": 7, "search": "demo mug"}
+        )
+        orders = await client.call_tool(
+            "list_orders",
+            {
+                "page": 2,
+                "per_page": 5,
+                "status": "processing",
+                "after": "2026-10-10",
+                "before": "2026-10-10",
+            },
+        )
+    assert not products.is_error and products.structured_content["total"] == 9
+    assert not orders.is_error and orders.structured_content["total"] == 1
+    assert "private@example.com" not in str(orders)
+    assert dict(requests[0].url.params) == {"page": "3", "per_page": "7", "search": "demo mug"}
+    assert dict(requests[1].url.params) == {
+        "page": "2",
+        "per_page": "5",
+        "status": "processing",
+        "after": "2026-10-09T23:59:59",
+        "before": "2026-10-11T00:00:00",
+    }
+    await wc.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [(401, "authentication"), (403, "permission"), (404, "not found"), (503, "unavailable")],
+)
+async def test_get_order_reports_safe_rest_errors(status: int, expected: str) -> None:
+    wc = WooClient(
+        settings(),
+        httpx.MockTransport(lambda _: httpx.Response(status, text="private customer data")),
+    )
+    async with Client(create_mcp(wc)) as client:
+        result = await client.call_tool("get_order", {"order_id": 12})
+    assert result.is_error
+    assert expected in str(result).lower()
+    assert "private customer data" not in str(result)
+    await wc.close()
+
+
+@pytest.mark.asyncio
+async def test_invalid_tool_inputs_never_reach_rest_api() -> None:
+    def unexpected(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("Invalid input reached WooCommerce")
+
+    wc = WooClient(settings(), httpx.MockTransport(unexpected))
+    async with Client(create_mcp(wc)) as client:
+        for name, arguments in (
+            ("list_products", {"per_page": 51}),
+            ("create_product", {"name": "Demo", "price": "-1"}),
+            ("get_order", {"order_id": 0}),
+            ("update_order_status", {"order_id": 12, "status": "invented"}),
+        ):
+            assert (await client.call_tool(name, arguments)).is_error
+    await wc.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["POST", "PUT"])
+@pytest.mark.parametrize("failure", [httpx.ReadTimeout, httpx.ConnectError])
+async def test_write_failure_is_uncertain_and_never_retried(
+    method: str, failure: type[httpx.RequestError]
+) -> None:
+    attempts = 0
+
+    def fail(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise failure("secret request data")
+
+    wc = WooClient(settings(), httpx.MockTransport(fail))
+    with pytest.raises(StoreError, match="may have succeeded") as caught:
+        await wc.request(method, "/wp-json/wc/v3/products", body={"name": "Test"})
+    assert attempts == 1
+    assert "secret request data" not in str(caught.value)
+    await wc.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("create_product", {"name": "Demo", "price": "12.00"}),
+        ("update_order_status", {"order_id": 12, "status": "completed"}),
+    ],
+)
+async def test_write_timeout_is_a_clear_mcp_tool_error(
+    tool: str, arguments: dict[str, str | int]
+) -> None:
+    attempts = 0
+
+    def timeout(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ReadTimeout("private request data")
+
+    wc = WooClient(settings(), httpx.MockTransport(timeout))
+    async with Client(create_mcp(wc)) as client:
+        result = await client.call_tool(tool, arguments)
+    assert result.is_error
+    assert "may have succeeded" in str(result)
+    assert "private request data" not in str(result)
+    assert attempts == 1
+    await wc.close()
+
+
+@pytest.mark.asyncio
+async def test_read_timeout_is_clear_and_sanitized() -> None:
     def timeout(_: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("secret request data")
 
     wc = WooClient(settings(), httpx.MockTransport(timeout))
-    with pytest.raises(StoreError, match="may have succeeded") as caught:
-        await wc.request("POST", "/wp-json/wc/v3/products", body={"name": "Test"})
+    with pytest.raises(StoreError, match="request timed out") as caught:
+        await wc.request("GET", "/wp-json/wc/v3/orders")
     assert "secret request data" not in str(caught.value)
     await wc.close()
 

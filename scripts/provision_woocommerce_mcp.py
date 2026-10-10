@@ -59,14 +59,27 @@ def main() -> None:
     result = kubectl("exec", "-i", "deploy/bridgecart-wordpress", "--", "php", "-r", php,
                      input_bytes=payload)
     if result.returncode:
-        diagnostic = result.stderr.decode(errors="replace")
-        for secret_value in api.values():
-            diagnostic = diagnostic.replace(secret_value, "[redacted]")
+        known_errors = (
+            "WooCommerce is not active",
+            "Credential input is invalid",
+            "Could not create dedicated WooCommerce user",
+            "Dedicated user has an unexpected role",
+            "Existing WooCommerce key has unexpected ownership or permissions",
+            "Existing WooCommerce key secret differs from Kubernetes Secret",
+            "Could not attach WooCommerce key",
+        )
+        diagnostic = next(
+            (message for message in known_errors if message.encode() in result.stderr),
+            "WordPress command failed; inspect pod availability and events",
+        )
         raise RuntimeError(
             f"WooCommerce credential provisioning failed (exit {result.returncode}): "
-            + diagnostic[:500].strip()
+            + diagnostic
         )
-    print("MCP Secrets are present; dedicated WooCommerce key:", result.stdout.decode().strip())
+    status = result.stdout.decode(errors="replace").strip()
+    if status not in {"created", "existing"}:
+        raise RuntimeError("WooCommerce credential provisioning returned unexpected output")
+    print("MCP Secrets are present; dedicated WooCommerce key:", status)
 
 
 if __name__ == "__main__":

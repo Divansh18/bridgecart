@@ -27,10 +27,14 @@ if (!in_array('shop_manager', $user->roles, true)) {
 global $wpdb;
 $table = $wpdb->prefix . 'woocommerce_api_keys';
 $hashed = wc_api_hash($input['key']);
-$existing = $wpdb->get_row($wpdb->prepare("SELECT user_id, permissions FROM {$table} WHERE consumer_key = %s", $hashed));
+$existing = $wpdb->get_row($wpdb->prepare("SELECT user_id, permissions, consumer_secret FROM {$table} WHERE consumer_key = %s", $hashed));
 if ($existing) {
     if ((int) $existing->user_id !== (int) $user->ID || $existing->permissions !== 'read_write') {
         fwrite(STDERR, "Existing WooCommerce key has unexpected ownership or permissions\n");
+        exit(1);
+    }
+    if (!hash_equals($existing->consumer_secret, $input['secret'])) {
+        fwrite(STDERR, "Existing WooCommerce key secret differs from Kubernetes Secret\n");
         exit(1);
     }
     echo "existing\n";
