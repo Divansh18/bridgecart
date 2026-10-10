@@ -8,7 +8,9 @@ async def database_is_ready(engine: AsyncEngine, timeout: float) -> bool:
     try:
         async with asyncio.timeout(timeout):
             async with engine.connect() as connection:
-                await connection.execute(text("SELECT 1"))
+                revision = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+                if revision != "20261010_01":
+                    return False
     except (Exception, TimeoutError):
         return False
     return True
