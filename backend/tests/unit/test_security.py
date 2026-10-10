@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 
@@ -38,10 +40,11 @@ def test_input_and_cookie_configuration() -> None:
 @pytest.mark.asyncio
 async def test_login_limiter_is_bounded_and_resets() -> None:
     limiter = LoginLimiter(max_failures=2)
-    assert not await limiter.is_limited("client:user")
-    await limiter.failed("client:user")
-    await limiter.failed("client:user")
-    assert await limiter.is_limited("client:user")
-    assert not await limiter.is_limited("other:user")
+    assert await limiter.allow_attempt("client:user")
+    assert await limiter.allow_attempt("client:user")
+    assert not await limiter.allow_attempt("client:user")
+    assert await limiter.allow_attempt("other:user")
     await limiter.succeeded("client:user")
-    assert not await limiter.is_limited("client:user")
+    assert await limiter.allow_attempt("client:user")
+    concurrent = await asyncio.gather(*(limiter.allow_attempt("parallel:user") for _ in range(20)))
+    assert sum(concurrent) == 2

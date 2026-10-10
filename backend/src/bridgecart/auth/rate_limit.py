@@ -11,17 +11,15 @@ class LoginLimiter:
         self._attempts: dict[str, list[float]] = {}
         self._lock = asyncio.Lock()
 
-    async def is_limited(self, key: str) -> bool:
+    async def allow_attempt(self, key: str) -> bool:
         async with self._lock:
             self._prune(key)
-            return len(self._attempts.get(key, [])) >= self.max_failures
-
-    async def failed(self, key: str) -> None:
-        async with self._lock:
-            self._prune(key)
+            if len(self._attempts.get(key, [])) >= self.max_failures:
+                return False
             self._attempts.setdefault(key, []).append(time.monotonic())
             if len(self._attempts) > 10_000:
                 self._attempts.pop(next(iter(self._attempts)))
+            return True
 
     async def succeeded(self, key: str) -> None:
         async with self._lock:

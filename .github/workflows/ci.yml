@@ -30,6 +30,31 @@ jobs:
         working-directory: ${{ matrix.project }}
       - run: uv run --locked ruff check . && uv run --locked ruff format --check . && uv run --locked mypy && uv run --locked pytest
         working-directory: ${{ matrix.project }}
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: bridgecart
+          POSTGRES_HOST_AUTH_METHOD: trust # isolated CI service; no production credential
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bridgecart -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked
+        working-directory: backend
+      - run: uv run --locked pytest -q tests/integration/test_team_access_postgres.py
+        working-directory: backend
+        env:
+          BRIDGECART_TEST_DATABASE_URL: postgresql+asyncpg://bridgecart@127.0.0.1:5432/postgres
   helm:
     runs-on: ubuntu-latest
     steps:

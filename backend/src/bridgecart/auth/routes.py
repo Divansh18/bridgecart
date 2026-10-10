@@ -16,15 +16,11 @@ def user_view(user: User) -> dict[str, object]:
 async def login(body: LoginInput, request: Request, response: Response, db: Db) -> dict[str, object]:
     limiter = request.app.state.login_limiter
     key = f"{request.client.host if request.client else 'unknown'}:{body.email}"
-    if await limiter.is_limited(key):
+    if not await limiter.allow_attempt(key):
         raise HTTPException(status_code=429, detail="Too many login attempts; try again later")
-    try:
-        user, session_token, csrf_token = await service.login(
-            db, body.email, body.password, request.app.state.settings.session_ttl_hours
-        )
-    except HTTPException:
-        await limiter.failed(key)
-        raise
+    user, session_token, csrf_token = await service.login(
+        db, body.email, body.password, request.app.state.settings.session_ttl_hours
+    )
     await limiter.succeeded(key)
     settings = request.app.state.settings
     cookie_options = {
