@@ -1,8 +1,8 @@
 [project]
 name = "bridgecart-woocommerce-mcp"
-version = "0.1.0"
+version = "0.3.4"
 requires-python = ">=3.12,<3.13"
-dependencies = ["mcp>=2.0,<3", "pydantic-settings>=2.10,<3"]
+dependencies = ["mcp>=2.0,<3", "pydantic-settings>=2.10,<3", "httpx>=0.28,<1", "uvicorn>=0.35,<1", "starlette>=0.47,<1"]
 
 [dependency-groups]
 dev = ["pytest>=8.4,<9", "pytest-asyncio>=1.1,<2", "ruff>=0.12,<1", "mypy>=1.17,<2"]
