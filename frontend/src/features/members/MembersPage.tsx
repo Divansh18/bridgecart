@@ -7,6 +7,7 @@ import {
   ErrorNotice,
   Field,
   inputClass,
+  Loading,
   Panel,
   SectionTitle,
 } from "@/components/Feedback";
@@ -25,12 +26,16 @@ export function MembersPage() {
   const [target, setTarget] = useState<Member | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   async function load() {
+    setLoading(true);
     try {
       setMembers(await endpoints.members());
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load members");
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => {
@@ -143,10 +148,14 @@ export function MembersPage() {
             <Users className="size-5 text-primary" />
             <h2 className="text-lg font-semibold">Team directory</h2>
             <span className="ml-auto text-sm text-slate-500">
-              {members.length} users
+              {members.length} members
             </span>
           </div>
-          {members.length ? (
+          {loading ? (
+            <div className="px-6">
+              <Loading />
+            </div>
+          ) : members.length ? (
             <div className="divide-y divide-border">
               {members.map((member) => (
                 <div

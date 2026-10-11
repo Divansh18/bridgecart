@@ -150,9 +150,9 @@ gateway-network-verify:
 	backend/.venv/bin/python scripts/verify_gateway_network.py
 
 dashboard-images:
-	docker build -t bridgecart/frontend:0.6.2 frontend
+	docker build -t bridgecart/frontend:0.6.3 frontend
 	docker build -t bridgecart/backend:0.6.0 backend
-	k3d image import bridgecart/frontend:0.6.2 bridgecart/backend:0.6.0 -c bridgecart
+	k3d image import bridgecart/frontend:0.6.3 bridgecart/backend:0.6.0 -c bridgecart
 
 dashboard-deploy: dashboard-images
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=true --set store.bootstrap.enabled=false --wait --timeout 20m

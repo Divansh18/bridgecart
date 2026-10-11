@@ -7,6 +7,7 @@ import {
   ErrorNotice,
   Field,
   inputClass,
+  Loading,
   Panel,
   SectionTitle,
 } from "@/components/Feedback";
@@ -23,6 +24,7 @@ export function KeysPage({ user }: { user: User }) {
   const [target, setTarget] = useState<ApiKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     if (user.role === "admin")
       void endpoints
@@ -31,20 +33,36 @@ export function KeysPage({ user }: { user: User }) {
         .catch((err) => setError(err.message));
   }, [user.role]);
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setKeys([]);
     void endpoints
       .keys(selected)
       .then((rows) => {
-        setKeys(rows);
-        setError("");
+        if (active) {
+          setKeys(rows);
+          setError("");
+        }
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        if (active) setError(err.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [selected]);
   async function load() {
+    setLoading(true);
     try {
       setKeys(await endpoints.keys(selected));
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load keys");
+    } finally {
+      setLoading(false);
     }
   }
   async function create(event: FormEvent) {
@@ -197,7 +215,11 @@ export function KeysPage({ user }: { user: User }) {
               {keys.length}
             </span>
           </div>
-          {keys.length ? (
+          {loading ? (
+            <div className="px-6">
+              <Loading />
+            </div>
+          ) : keys.length ? (
             <div className="divide-y divide-border">
               {keys.map((key) => (
                 <div
