@@ -1,6 +1,6 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway for WooCommerce. Milestone 4B adds a PostgreSQL-backed upstream registry, a user-key-authenticated Streamable HTTP gateway, two seeded demo MCP services, and per-tool audit records. The dashboard and LLM chat remain future work.
+BridgeCart is a team MCP gateway for WooCommerce. Milestone five adds a React operations dashboard for the existing team API, upstream registry, API keys, and audit logs. LLM chat remains future work.
 
 ## Local store
 
@@ -21,9 +21,13 @@ make backend-live-verify  # live admin/member flow and backend pod replacement
 make gateway-verify  # seven tools across three upstreams and two-user audit attribution
 make gateway-outage-verify  # controlled shipping outage, then automatic restoration
 make gateway-network-verify  # owned temporary Pod tests denied network paths
+make dashboard-deploy  # build/import frontend and updated backend; preserve store and PVCs
+make dashboard-status
+make dashboard-smoke
+make dashboard-live-verify  # Playwright admin/member flow; creates deactivated test member
 ```
 
-Add `127.0.0.1 shop.bridgecart.local api.bridgecart.local` to your hosts file if absent. Open [the storefront](http://shop.bridgecart.local:8088/), [WordPress admin](http://shop.bridgecart.local:8088/wp-admin/), and [team API](http://api.bridgecart.local:8088/docs). WordPress and BridgeCart have separate admin accounts and Secrets; retrieve credentials privately as described in [local development](docs/local-development.md). No credentials are stored in this repository.
+Add `127.0.0.1 shop.bridgecart.local api.bridgecart.local app.bridgecart.local` to your hosts file if absent. Open [the storefront](http://shop.bridgecart.local:8088/), [WordPress admin](http://shop.bridgecart.local:8088/wp-admin/), [team API](http://api.bridgecart.local:8088/docs), and [dashboard](http://app.bridgecart.local:8088/). WordPress and BridgeCart have separate admin accounts and Secrets; retrieve credentials privately as described in [local development](docs/local-development.md). No credentials are stored in this repository.
 
 `make store-cluster` checks for an existing cluster and occupied ports before creating anything. It never deletes a cluster. `make store-secrets` preserves an existing Secret. `make store-deploy` runs the Helm bootstrap hook; `make store-bootstrap` runs it again to check idempotency. Optional `make store-images` imports the pinned images into k3d when node pulls are unavailable.
 
@@ -32,7 +36,7 @@ The local demo is made public and uses Shop as its homepage on its first bootstr
 
 ## Repository
 
-- `frontend/`: React/Vite landing screen from milestone one; not deployed by this chart.
+- `frontend/`: React/Vite operations dashboard, deployed through Traefik at `app.bridgecart.local` with same-origin `/api` routing.
 - `backend/`: team API, PostgreSQL migrations, admin upstream registry, and MCP gateway at `/mcp`.
 - `services/`: WooCommerce, seeded inventory, and deterministic shipping MCP services, each deployed internally.
 - `deploy/helm/bridgecart/`: one chart for local k3d and production k3s; values files select environment details.
