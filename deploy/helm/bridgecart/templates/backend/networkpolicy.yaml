@@ -74,6 +74,14 @@ spec:
               {{- include "bridgecart.selectorLabels" . | nindent 14 }}
               app.kubernetes.io/component: shipping-mcp
       ports: [{protocol: TCP, port: 8003}]
+    {{- range .Values.backend.gateway.extraEgress }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ .component | quote }}
+      ports: [{protocol: TCP, port: {{ .port }}}]
+    {{- end }}
     {{- end }}
 ---
 apiVersion: networking.k8s.io/v1

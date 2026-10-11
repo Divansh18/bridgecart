@@ -17,6 +17,7 @@ backend:
       - http://bridgecart-woocommerce-mcp:8001/mcp
       - http://bridgecart-inventory-mcp:8002/mcp
       - http://bridgecart-shipping-mcp:8003/mcp
+    extraEgress: []
   ingress:
     className: traefik
     namespace: kube-system
