@@ -1,6 +1,8 @@
 stage: local
 backend:
   enabled: true
+  gateway:
+    enabled: true
   host: api.bridgecart.local
   cookieSecure: false
   cookieSameSite: lax
@@ -10,6 +12,10 @@ postgres:
   enabled: true
   storage: {className: local-path, size: 5Gi}
 woocommerceMcp:
+  enabled: true
+inventoryMcp:
+  enabled: true
+shippingMcp:
   enabled: true
 store:
   host: shop.bridgecart.local

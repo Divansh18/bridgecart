@@ -9,7 +9,9 @@
     "mcpServers",
     "store",
     "woocommerceMcp",
-    "postgres"
+    "postgres",
+    "inventoryMcp",
+    "shippingMcp"
   ],
   "properties": {
     "stage": {
@@ -36,7 +38,8 @@
         "corsOrigins",
         "ingress",
         "resources",
-        "migrationResources"
+        "migrationResources",
+        "gateway"
       ],
       "properties": {
         "enabled": {
@@ -140,6 +143,34 @@
         },
         "migrationResources": {
           "$ref": "#/definitions/resources"
+        },
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "encryptionSecret",
+            "allowedUrls"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "encryptionSecret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "allowedUrls": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^https?://[a-z0-9.-]+:[0-9]+/mcp$"
+              }
+            }
+          }
         }
       }
     },
@@ -453,6 +484,72 @@
               "const": true
             }
           }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "inventoryMcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "imagePullPolicy",
+        "bearerSecret",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "imagePullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "bearerSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        }
+      }
+    },
+    "shippingMcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "imagePullPolicy",
+        "bearerSecret",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "imagePullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "bearerSecret": {
+          "type": "string",
+          "minLength": 1
         },
         "resources": {
           "$ref": "#/definitions/resources"

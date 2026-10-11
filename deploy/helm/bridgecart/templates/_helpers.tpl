@@ -10,6 +10,13 @@
 - {name: BRIDGECART_COOKIE_SECURE, value: {{ .Values.backend.cookieSecure | quote }}}
 - {name: BRIDGECART_COOKIE_SAMESITE, value: {{ .Values.backend.cookieSameSite | quote }}}
 - {name: BRIDGECART_CORS_ORIGINS, value: {{ .Values.backend.corsOrigins | quote }}}
+- {name: BRIDGECART_GATEWAY_ENABLED, value: {{ .Values.backend.gateway.enabled | quote }}}
+{{- if .Values.backend.gateway.enabled }}
+- {name: BRIDGECART_GATEWAY_ALLOWED_URLS, value: {{ join "," .Values.backend.gateway.allowedUrls | quote }}}
+- name: BRIDGECART_UPSTREAM_ENCRYPTION_KEY
+  valueFrom:
+    secretKeyRef: {name: {{ .Values.backend.gateway.encryptionSecret | quote }}, key: fernet-key}
+{{- end }}
 {{- end -}}
 
 {{- define "bridgecart.backendDbEgress" -}}

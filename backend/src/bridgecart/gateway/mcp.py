@@ -39,6 +39,9 @@ class ApiKeyGuard:
         except HTTPException:
             await Response(status_code=401, headers={"WWW-Authenticate": "Bearer"})(scope, receive, send)
             return
+        except Exception:
+            await Response(status_code=503)(scope, receive, send)
+            return
         token = _authorization.set(authorization)
         try:
             await self.app(scope, receive, send)
@@ -48,14 +51,21 @@ class ApiKeyGuard:
 
 def create_gateway_mcp(gateway: Gateway, factory: async_sessionmaker[AsyncSession]) -> tuple[Server[Any], ASGIApp]:
     async def list_tools(_ctx: Any, _params: PaginatedRequestParams | None) -> ListToolsResult:
-        await _actor(factory)
-        return ListToolsResult(tools=await gateway.list_tools())
+        try:
+            await _actor(factory)
+            return ListToolsResult(tools=await gateway.list_tools())
+        except HTTPException:
+            raise RuntimeError("API key is no longer valid") from None
+        except Exception:
+            raise RuntimeError("Gateway registry is unavailable") from None
 
     async def call_tool(_ctx: Any, params: CallToolRequestParams) -> CallToolResult:
         try:
             actor = await _actor(factory)
         except HTTPException:
             return safe_result("authentication", "API key is no longer valid")
+        except Exception:
+            return safe_result("authentication_unavailable", "Gateway authentication is unavailable")
         return await gateway.execute(actor, params.name, params.arguments or {})
 
     server: Server[Any] = Server("BridgeCart Gateway", on_list_tools=list_tools, on_call_tool=call_tool)

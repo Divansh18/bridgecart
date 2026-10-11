@@ -1,7 +1,7 @@
 stage: production
 backend:
   enabled: true
-  image: registry.example.com/bridgecart/backend:0.4.0
+  image: registry.example.com/bridgecart/backend:0.5.0
   imagePullPolicy: Always
   host: api.example.com
   databaseSecret: replace-with-existing-postgres-secret
@@ -9,6 +9,13 @@ backend:
   cookieSecure: true
   cookieSameSite: lax
   corsOrigins: https://app.example.com
+  gateway:
+    enabled: true
+    encryptionSecret: replace-with-existing-upstream-encryption-secret
+    allowedUrls:
+      - http://bridgecart-woocommerce-mcp:8001/mcp
+      - http://bridgecart-inventory-mcp:8002/mcp
+      - http://bridgecart-shipping-mcp:8003/mcp
   ingress:
     tls: {enabled: true, secretName: replace-with-existing-api-tls-secret}
 postgres:
@@ -21,6 +28,16 @@ woocommerceMcp:
   imagePullPolicy: Always
   apiSecret: replace-with-existing-woocommerce-api-secret
   bearerSecret: replace-with-existing-mcp-bearer-secret
+inventoryMcp:
+  enabled: true
+  image: registry.example.com/bridgecart/inventory-mcp:0.5.0
+  imagePullPolicy: Always
+  bearerSecret: replace-with-existing-inventory-bearer-secret
+shippingMcp:
+  enabled: true
+  image: registry.example.com/bridgecart/shipping-mcp:0.5.0
+  imagePullPolicy: Always
+  bearerSecret: replace-with-existing-shipping-bearer-secret
 store:
   host: shop.example.com
   publicUrl: https://shop.example.com

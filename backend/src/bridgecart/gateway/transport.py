@@ -11,6 +11,10 @@ class ResponseTooLarge(Exception):
     pass
 
 
+class UpstreamRedirect(Exception):
+    pass
+
+
 class LimitedStream(httpx2.AsyncByteStream):
     def __init__(self, original: httpx2.AsyncByteStream) -> None:
         self.original = original
@@ -29,7 +33,7 @@ class LimitedStream(httpx2.AsyncByteStream):
 
 class LimitedTransport(httpx2.AsyncBaseTransport):
     def __init__(self) -> None:
-        self.inner = httpx2.AsyncHTTPTransport(
+        self.inner: httpx2.AsyncBaseTransport = httpx2.AsyncHTTPTransport(
             trust_env=False,
             limits=httpx2.Limits(max_connections=4, max_keepalive_connections=2),
             retries=0,
@@ -37,6 +41,9 @@ class LimitedTransport(httpx2.AsyncBaseTransport):
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         response = await self.inner.handle_async_request(request)
+        if 300 <= response.status_code < 400:
+            await response.aclose()
+            raise UpstreamRedirect("Upstream redirect is not permitted")
         length = response.headers.get("content-length")
         if length and length.isdigit() and int(length) > MAX_WIRE_BYTES:
             await response.aclose()

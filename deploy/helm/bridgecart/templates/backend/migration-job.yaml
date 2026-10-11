@@ -29,7 +29,7 @@ spec:
           image: {{ .Values.backend.image | quote }}
           imagePullPolicy: {{ .Values.backend.imagePullPolicy }}
           command: [/bin/sh, -ec]
-          args: ["/app/.venv/bin/alembic upgrade head && /app/.venv/bin/python -m bridgecart.auth.bootstrap"]
+          args: ["/app/.venv/bin/alembic upgrade head && /app/.venv/bin/python -m bridgecart.auth.bootstrap && /app/.venv/bin/python -m bridgecart.gateway.bootstrap"]
           env:
             {{- include "bridgecart.backendEnv" . | nindent 12 }}
             - name: BRIDGECART_INITIAL_ADMIN_EMAIL
@@ -38,6 +38,17 @@ spec:
             - name: BRIDGECART_INITIAL_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ .Values.backend.initialAdminSecret | quote }}, key: admin-password}
+            {{- if .Values.backend.gateway.enabled }}
+            - name: BRIDGECART_SEED_WOOCOMMERCE_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.woocommerceMcp.bearerSecret | quote }}, key: token}
+            - name: BRIDGECART_SEED_INVENTORY_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.inventoryMcp.bearerSecret | quote }}, key: token}
+            - name: BRIDGECART_SEED_SHIPPING_TOKEN
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.shippingMcp.bearerSecret | quote }}, key: token}
+            {{- end }}
           resources:
             {{- toYaml .Values.backend.migrationResources | nindent 12 }}
           securityContext:

@@ -19,7 +19,7 @@ from bridgecart.auth.models import ApiKey, User, utc_now
 from bridgecart.core.config import Settings
 from bridgecart.gateway.models import ToolAudit, UpstreamServer
 from bridgecart.gateway.security import cipher
-from bridgecart.gateway.transport import LimitedTransport, ResponseTooLarge
+from bridgecart.gateway.transport import LimitedTransport, ResponseTooLarge, UpstreamRedirect
 
 MAX_TOOLS = 50
 MAX_SCHEMA_BYTES = 65536
@@ -117,6 +117,8 @@ class Gateway:
             raise GatewayFailure("timeout", "Upstream timed out; a write may have completed") from exc
         except ResponseTooLarge as exc:
             raise GatewayFailure("limits", "Upstream response exceeds wire-size limit") from exc
+        except UpstreamRedirect as exc:
+            raise GatewayFailure("redirect", "Upstream redirect is not permitted") from exc
         except GatewayFailure:
             raise
         except Exception as exc:
@@ -168,19 +170,22 @@ class Gateway:
 
     async def execute(self, actor: ApiKeyActor, public: str, arguments: dict[str, Any]) -> CallToolResult:
         # The shared execution boundary does not trust a previously validated actor.
-        async with self.factory() as db:
-            actor_query = await db.execute(
-                select(ApiKey, User).join(User, User.id == ApiKey.user_id).where(ApiKey.id == actor.key.id)
-            )
-            matched = actor_query.one_or_none()
-            if (
-                matched is None
-                or matched[0].revoked_at is not None
-                or not matched[1].active
-                or matched[1].id != actor.user.id
-            ):
-                return safe_result("authentication", "API key is no longer valid")
-            actor = ApiKeyActor(user=matched[1], key=matched[0])
+        try:
+            async with self.factory() as db:
+                actor_query = await db.execute(
+                    select(ApiKey, User).join(User, User.id == ApiKey.user_id).where(ApiKey.id == actor.key.id)
+                )
+                matched = actor_query.one_or_none()
+                if (
+                    matched is None
+                    or matched[0].revoked_at is not None
+                    or not matched[1].active
+                    or matched[1].id != actor.user.id
+                ):
+                    return safe_result("authentication", "API key is no longer valid")
+                actor = ApiKeyActor(user=matched[1], key=matched[0])
+        except Exception:
+            return safe_result("authentication_unavailable", "Gateway authentication is unavailable")
         started = time.monotonic()
         server_id = public[3:35]
         server: UpstreamServer | None = None
@@ -193,26 +198,26 @@ class Gateway:
                 server_id = ""
         else:
             server_id = ""
-        async with self.factory() as db:
-            if server_id:
-                server = await db.get(UpstreamServer, server_id)
-            audit = ToolAudit(
-                user_id=actor.user.id,
-                user_email=actor.user.email,
-                api_key_id=actor.key.id,
-                server_id=server.id if server else None,
-                server_name=server.name if server else None,
-                original_tool_name=None,
-                exposed_tool_name=public[:200],
-                started_at=utc_now(),
-                outcome="started",
-            )
-            db.add(audit)
-            try:
+        try:
+            async with self.factory() as db:
+                if server_id:
+                    server = await db.get(UpstreamServer, server_id)
+                audit = ToolAudit(
+                    user_id=actor.user.id,
+                    user_email=actor.user.email,
+                    api_key_id=actor.key.id,
+                    server_id=server.id if server else None,
+                    server_name=server.name if server else None,
+                    original_tool_name=None,
+                    exposed_tool_name=public[:200],
+                    started_at=utc_now(),
+                    outcome="started",
+                )
+                db.add(audit)
                 await db.commit()  # Fail closed before any upstream dispatch.
-            except Exception:
-                return safe_result("audit_unavailable", "Audit storage unavailable; call was not dispatched")
-            audit_id = audit.id
+                audit_id = audit.id
+        except Exception:
+            return safe_result("audit_unavailable", "Audit storage unavailable; call was not dispatched")
 
         outcome = "rejected"
         category: str | None = "unknown_tool"

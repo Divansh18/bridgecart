@@ -2,7 +2,7 @@ stage: local
 frontend: {enabled: false}
 backend:
   enabled: false
-  image: bridgecart/backend:0.4.0
+  image: bridgecart/backend:0.5.0
   imagePullPolicy: IfNotPresent
   host: api.bridgecart.local
   databaseSecret: bridgecart-postgres-credentials
@@ -10,6 +10,13 @@ backend:
   cookieSecure: false
   cookieSameSite: lax
   corsOrigins: http://localhost:5173
+  gateway:
+    enabled: false
+    encryptionSecret: bridgecart-upstream-encryption
+    allowedUrls:
+      - http://bridgecart-woocommerce-mcp:8001/mcp
+      - http://bridgecart-inventory-mcp:8002/mcp
+      - http://bridgecart-shipping-mcp:8003/mcp
   ingress:
     className: traefik
     namespace: kube-system
@@ -34,6 +41,22 @@ postgres:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "1", memory: 1Gi}
 mcpServers: {enabled: false}
+inventoryMcp:
+  enabled: false
+  image: bridgecart/inventory-mcp:0.5.0
+  imagePullPolicy: IfNotPresent
+  bearerSecret: bridgecart-inventory-mcp-bearer
+  resources:
+    requests: {cpu: 25m, memory: 96Mi}
+    limits: {cpu: 250m, memory: 256Mi}
+shippingMcp:
+  enabled: false
+  image: bridgecart/shipping-mcp:0.5.0
+  imagePullPolicy: IfNotPresent
+  bearerSecret: bridgecart-shipping-mcp-bearer
+  resources:
+    requests: {cpu: 25m, memory: 96Mi}
+    limits: {cpu: 250m, memory: 256Mi}
 woocommerceMcp:
   enabled: false
   image: bridgecart/woocommerce-mcp:0.3.4

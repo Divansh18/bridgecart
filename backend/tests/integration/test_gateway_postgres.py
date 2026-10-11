@@ -26,7 +26,7 @@ from bridgecart.core.config import Settings, get_settings
 from bridgecart.gateway.bootstrap import bootstrap
 from bridgecart.gateway.models import UpstreamServer
 from bridgecart.gateway.security import cipher, validate_header, validate_url
-from bridgecart.gateway.service import GatewayFailure, exposed_name
+from bridgecart.gateway.service import Gateway, GatewayFailure, exposed_name
 from bridgecart.main import create_app
 
 BACKEND = Path(__file__).resolve().parents[2]
@@ -264,6 +264,24 @@ def test_registry_destination_and_header_policy() -> None:
     for header in ("Host", "Connection", "X-Forwarded-For", "X-Bad\r\nInjected", "Authorization"):
         with pytest.raises(HTTPException):
             validate_header(header)
+    secured = Settings(
+        database_url="postgresql+asyncpg://user:pass@localhost/db",
+        gateway_enabled=True,
+        upstream_encryption_key=Fernet.generate_key().decode(),
+        gateway_allowed_urls=",".join(URLS),
+    )
+    upstream = UpstreamServer(
+        id="00000000-0000-0000-0000-000000000001",
+        name="Header demo",
+        url=URLS[0],
+        enabled=True,
+        auth_type="header",
+        header_name="X-Demo-Token",
+        credential_encrypted=cipher(secured).encrypt(b"upstream-only"),
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    assert Gateway(secured, None)._headers(upstream) == {"X-Demo-Token": "upstream-only"}  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

@@ -14,12 +14,7 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "bridgecart.selectorLabels" . | nindent 14 }}
-              app.kubernetes.io/component: gateway
-        {{- if eq .Values.stage "local" }}
-        - podSelector:
-            matchLabels:
-              bridgecart.dev/mcp-verify: "true"
-        {{- end }}
+              app.kubernetes.io/component: backend
       ports:
         - {protocol: TCP, port: 8001}
   egress:
