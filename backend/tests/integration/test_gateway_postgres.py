@@ -217,6 +217,33 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
                         assert len(refreshed.tools) == 1
                         public_third = refreshed.tools[0].name
                         assert public_third == exposed_name(third, "lookup")
+
+                        async def admin_transport_call() -> CallToolResult:
+                            async with httpx2.AsyncClient(
+                                transport=httpx2.ASGITransport(app=app),
+                                headers={"Authorization": "Bearer " + raw_admin_key},
+                            ) as admin_transport:
+                                async with streamable_http_client(
+                                    "http://test/mcp", http_client=admin_transport, terminate_on_close=False
+                                ) as admin_streams:
+                                    async with ClientSession(*admin_streams) as admin_mcp:
+                                        await admin_mcp.initialize()
+                                        result = await admin_mcp.call_tool(public_third, {})
+                                        assert isinstance(result, CallToolResult)
+                                        return result
+
+                        concurrent = await asyncio.gather(admin_transport_call(), client.call_tool(public_third, {}))
+                        assert all(not result.is_error for result in concurrent)
+                        async with app.state.session_factory() as db:
+                            attributed = (
+                                await db.scalars(
+                                    select(ToolAudit).where(
+                                        ToolAudit.server_id == third,
+                                        ToolAudit.outcome == "success",
+                                    )
+                                )
+                            ).all()
+                            assert {row.user_id for row in attributed} == {admin_actor.user.id, member_actor.user.id}
                         assert (
                             await admin_again.patch(
                                 f"/servers/{third}", headers={"X-CSRF-Token": token}, json={"enabled": False}
