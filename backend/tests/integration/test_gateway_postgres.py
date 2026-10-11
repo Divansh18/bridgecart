@@ -24,7 +24,7 @@ from bridgecart.auth.models import ApiKey, User, utc_now
 from bridgecart.auth.security import hash_password, token_hash
 from bridgecart.core.config import Settings, get_settings
 from bridgecart.gateway.bootstrap import bootstrap
-from bridgecart.gateway.models import UpstreamServer
+from bridgecart.gateway.models import ToolAudit, UpstreamServer
 from bridgecart.gateway.security import cipher, validate_header, validate_url
 from bridgecart.gateway.service import Gateway, GatewayFailure, exposed_name
 from bridgecart.main import create_app
@@ -234,6 +234,11 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
                     with pytest.raises(MCPError):
                         await client.list_tools()
                     assert (await gateway.execute(member_actor, public_third, {})).is_error
+
+    async with app.state.session_factory() as db:
+        retained = (await db.scalars(select(ToolAudit).where(ToolAudit.api_key_id == member_key.id))).all()
+        assert retained and all(row.user_email == "member@example.com" for row in retained)
+        assert any(row.server_name == "Inventory" for row in retained)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as member_http:
         assert (
