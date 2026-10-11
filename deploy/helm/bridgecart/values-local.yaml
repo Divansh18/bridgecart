@@ -1,4 +1,7 @@
 stage: local
+frontend:
+  host: app.bridgecart.local
+  gatewayUrl: http://api.bridgecart.local:8088/mcp
 backend:
   enabled: true
   gateway:

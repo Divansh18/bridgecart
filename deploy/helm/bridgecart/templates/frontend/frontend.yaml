@@ -1,0 +1,137 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-frontend-config
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+data:
+  config.js: |
+    window.bridgecartConfig = { gatewayUrl: {{ .Values.frontend.gatewayUrl | toJson }} };
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-frontend
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bridgecart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-frontend
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "bridgecart.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+      annotations:
+        checksum/config: {{ .Values.frontend.gatewayUrl | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: frontend
+          image: {{ .Values.frontend.image | quote }}
+          imagePullPolicy: {{ .Values.frontend.imagePullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+          volumeMounts:
+            - {name: config, mountPath: /usr/share/nginx/html/config.js, subPath: config.js, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+          startupProbe:
+            httpGet: {path: /config.js, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: config
+          configMap: {name: {{ include "bridgecart.fullname" . }}-frontend-config}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-dashboard-api
+spec:
+  stripPrefix:
+    prefixes: [/api]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-dashboard-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ include "bridgecart.fullname" . }}-dashboard-api@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.frontend.ingress.className | quote }}
+  {{- if .Values.frontend.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.frontend.host | quote }}]
+      secretName: {{ .Values.frontend.ingress.tls.secretName | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.frontend.host | quote }}
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "bridgecart.fullname" . }}-backend
+                port: {name: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-dashboard
+spec:
+  ingressClassName: {{ .Values.frontend.ingress.className | quote }}
+  {{- if .Values.frontend.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.frontend.host | quote }}]
+      secretName: {{ .Values.frontend.ingress.tls.secretName | quote }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.frontend.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "bridgecart.fullname" . }}-frontend
+                port: {name: http}
+{{- end }}

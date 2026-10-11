@@ -1,8 +1,19 @@
 stage: local
-frontend: {enabled: false}
+frontend:
+  enabled: false
+  image: bridgecart/frontend:0.6.2
+  imagePullPolicy: IfNotPresent
+  host: app.bridgecart.local
+  gatewayUrl: http://api.bridgecart.local:8088/mcp
+  ingress:
+    className: traefik
+    tls: {enabled: false, secretName: ""}
+  resources:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
 backend:
   enabled: false
-  image: bridgecart/backend:0.5.0
+  image: bridgecart/backend:0.6.0
   imagePullPolicy: IfNotPresent
   host: api.bridgecart.local
   databaseSecret: bridgecart-postgres-credentials

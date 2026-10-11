@@ -1,4 +1,4 @@
-.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify backend-secrets backend-image backend-deploy backend-status backend-verify backend-live-verify gateway-secrets gateway-images gateway-deploy gateway-status gateway-verify gateway-outage-verify gateway-network-verify
+.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify backend-secrets backend-image backend-deploy backend-status backend-verify backend-live-verify gateway-secrets gateway-images gateway-deploy gateway-status gateway-verify gateway-outage-verify gateway-network-verify dashboard-images dashboard-deploy dashboard-status dashboard-smoke dashboard-live-verify
 
 PYTHON_PROJECTS := backend services/woocommerce-mcp services/inventory-mcp services/shipping-mcp
 
@@ -46,7 +46,7 @@ helm-check:
 	helm template bridgecart deploy/helm/bridgecart -f deploy/helm/bridgecart/values-prod.yaml > /dev/null
 
 scripts-check:
-	python3 -m py_compile scripts/provision_woocommerce_mcp.py scripts/rotate_woocommerce_mcp_key.py scripts/backend_secrets.py scripts/verify_backend_postgres.py scripts/verify_backend_live.py scripts/local_invite.py scripts/gateway_secrets.py scripts/verify_gateway_live.py scripts/verify_gateway_outage.py scripts/verify_gateway_network.py
+	python3 -m py_compile scripts/provision_woocommerce_mcp.py scripts/rotate_woocommerce_mcp_key.py scripts/backend_secrets.py scripts/verify_backend_postgres.py scripts/verify_backend_live.py scripts/local_invite.py scripts/gateway_secrets.py scripts/verify_gateway_live.py scripts/verify_gateway_outage.py scripts/verify_gateway_network.py scripts/dashboard_smoke.py scripts/verify_dashboard_live.py
 
 check: lint typecheck format-check test build helm-check scripts-check
 
@@ -66,8 +66,9 @@ store-deploy:
 	inventory_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-inventory-mcp >/dev/null 2>&1 && echo true || echo false); \
 	shipping_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-shipping-mcp >/dev/null 2>&1 && echo true || echo false); \
 	backend_image=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-backend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null); \
-	backend_image=$${backend_image:-bridgecart/backend:0.5.0}; \
-	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set woocommerceMcp.enabled=$$mcp_enabled --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
+	backend_image=$${backend_image:-bridgecart/backend:0.6.0}; \
+	frontend_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-frontend >/dev/null 2>&1 && echo true || echo false); \
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=$$frontend_enabled --set woocommerceMcp.enabled=$$mcp_enabled --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
 
 store-bootstrap: store-deploy
 
@@ -93,8 +94,9 @@ mcp-deploy: mcp-secrets mcp-image
 	inventory_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-inventory-mcp >/dev/null 2>&1 && echo true || echo false); \
 	shipping_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-shipping-mcp >/dev/null 2>&1 && echo true || echo false); \
 	backend_image=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-backend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null); \
-	backend_image=$${backend_image:-bridgecart/backend:0.5.0}; \
-	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
+	backend_image=$${backend_image:-bridgecart/backend:0.6.0}; \
+	frontend_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-frontend >/dev/null 2>&1 && echo true || echo false); \
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=$$frontend_enabled --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
 
 mcp-status:
 	kubectl --context k3d-bridgecart -n bridgecart get deployment/bridgecart-woocommerce-mcp service/bridgecart-woocommerce-mcp networkpolicy/bridgecart-woocommerce-mcp
@@ -105,8 +107,8 @@ backend-secrets:
 	python3 scripts/backend_secrets.py
 
 backend-image:
-	docker build -t bridgecart/backend:0.5.0 backend
-	k3d image import bridgecart/backend:0.5.0 -c bridgecart
+	docker build -t bridgecart/backend:0.6.0 backend
+	k3d image import bridgecart/backend:0.6.0 -c bridgecart
 
 backend-deploy: gateway-deploy
 
@@ -131,7 +133,8 @@ gateway-deploy: backend-secrets gateway-secrets gateway-images
 	@if ! kubectl --context k3d-bridgecart -n bridgecart get statefulset bridgecart-postgres >/dev/null 2>&1; then \
 	  helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set backend.enabled=false --set backend.gateway.enabled=false --set inventoryMcp.enabled=false --set shippingMcp.enabled=false --wait --timeout 20m || exit $$?; \
 	fi
-	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --wait --timeout 20m
+	@frontend_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-frontend >/dev/null 2>&1 && echo true || echo false); \
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=$$frontend_enabled --wait --timeout 20m
 	kubectl --context k3d-bridgecart -n bridgecart rollout status deployment/bridgecart-backend --timeout=5m
 
 gateway-status:
@@ -145,3 +148,21 @@ gateway-outage-verify:
 
 gateway-network-verify:
 	backend/.venv/bin/python scripts/verify_gateway_network.py
+
+dashboard-images:
+	docker build -t bridgecart/frontend:0.6.2 frontend
+	docker build -t bridgecart/backend:0.6.0 backend
+	k3d image import bridgecart/frontend:0.6.2 bridgecart/backend:0.6.0 -c bridgecart
+
+dashboard-deploy: dashboard-images
+	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=true --set store.bootstrap.enabled=false --wait --timeout 20m
+	kubectl --context k3d-bridgecart -n bridgecart rollout status deployment/bridgecart-frontend deployment/bridgecart-backend --timeout=5m
+
+dashboard-status:
+	kubectl --context k3d-bridgecart -n bridgecart get deployment/bridgecart-frontend deployment/bridgecart-backend ingress/bridgecart-dashboard ingress/bridgecart-dashboard-api networkpolicy/bridgecart-frontend
+
+dashboard-smoke:
+	python3 scripts/dashboard_smoke.py
+
+dashboard-live-verify:
+	python3 scripts/verify_dashboard_live.py
