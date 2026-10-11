@@ -272,6 +272,9 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
             await member_http.post("/auth/login", json={"email": "member@example.com", "password": member_password})
         ).status_code == 200
         assert (await member_http.get("/servers")).status_code == 403
+        safe_catalog = await member_http.get("/servers/catalog")
+        assert safe_catalog.status_code == 200
+        assert all("url" not in row and "has_credential" not in row for row in safe_catalog.json())
         assert (await member_http.get("/audit?user_id=1")).status_code == 403
         own = await member_http.get("/audit")
         assert own.status_code == 200

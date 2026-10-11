@@ -49,6 +49,32 @@ def server_view(
     }
 
 
+@router.get("/servers/catalog")
+async def member_catalog(request: Request, actor: SessionUser) -> list[dict[str, object]]:
+    """Safe status and tool metadata for every signed-in dashboard user."""
+    catalog = await request.app.state.gateway.catalog()
+    return [
+        {
+            "id": server.id,
+            "name": server.name,
+            "status": discovery.status,
+            "reason": discovery.reason,
+            "tools": [
+                {
+                    "name": name,
+                    "original_name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.input_schema,
+                    "output_schema": tool.output_schema,
+                    "annotations": tool.annotations.model_dump(by_alias=True) if tool.annotations else None,
+                }
+                for name, tool in discovery.tools.items()
+            ],
+        }
+        for server, discovery in catalog
+    ]
+
+
 @router.get("/servers")
 async def list_servers(request: Request, admin: Admin) -> list[dict[str, object]]:
     catalog = await request.app.state.gateway.catalog()
