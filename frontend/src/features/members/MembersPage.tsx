@@ -11,10 +11,12 @@ import {
   SectionTitle,
 } from "@/components/Feedback";
 import { endpoints, type Member } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 
 export function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [email, setEmail] = useState("");
+  const [copied, setCopied] = useState(false);
   const [invitation, setInvitation] = useState<{
     email: string;
     token: string;
@@ -39,6 +41,7 @@ export function MembersPage() {
     setBusy(true);
     setError("");
     setInvitation(null);
+    setCopied(false);
     try {
       setInvitation(await endpoints.invite(email));
       setEmail("");
@@ -115,10 +118,22 @@ export function MembersPage() {
                   type="button"
                   variant="outline"
                   aria-label="Copy invitation link"
-                  onClick={() => void navigator.clipboard.writeText(link)}
+                  onClick={() =>
+                    void copyText(link)
+                      .then(() => setCopied(true))
+                      .catch((err) => setError(err.message))
+                  }
                 >
                   <Copy className="size-4" />
                 </Button>
+                {copied && (
+                  <span
+                    role="status"
+                    className="self-center text-xs text-emerald-800"
+                  >
+                    Copied
+                  </span>
+                )}
               </div>
             </div>
           )}

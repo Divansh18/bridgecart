@@ -19,6 +19,7 @@ import {
   StatusBadge,
 } from "@/components/Feedback";
 import { endpoints, type Server, type ServerInput } from "@/lib/api";
+import { useDialogKeyboard } from "@/lib/useDialogKeyboard";
 
 type CredentialChoice = "keep" | "replace" | "remove";
 export function ServersPage({
@@ -254,6 +255,7 @@ function ServerEditor({
   const [choice, setChoice] = useState<CredentialChoice>("keep");
   const [credential, setCredential] = useState("");
   const [busy, setBusy] = useState(false);
+  const dialogRef = useDialogKeyboard(onClose, busy);
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -305,6 +307,7 @@ function ServerEditor({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-editor-title"

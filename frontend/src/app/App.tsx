@@ -62,6 +62,7 @@ const nav = [
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  const [initialError, setInitialError] = useState("");
   const [expired, setExpired] = useState(false);
   const [page, setPage] = useState<Page>(pathPage);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -93,16 +94,23 @@ export function App() {
       );
     }
   }, []);
-  useEffect(() => {
-    void endpoints
+  const checkSession = useCallback(async () => {
+    setChecking(true);
+    setInitialError("");
+    await endpoints
       .me()
       .then(setUser)
       .catch((err: unknown) => {
         if (!(err instanceof ApiError && err.status === 401))
-          setRecentError("Could not check your session. Retry the page.");
+          setInitialError(
+            "Could not check your session. Retry when the API is available.",
+          );
       })
       .finally(() => setChecking(false));
   }, []);
+  useEffect(() => {
+    void checkSession();
+  }, [checkSession]);
   useEffect(() => {
     const onExpired = () => {
       setUser(null);
@@ -149,6 +157,12 @@ export function App() {
     return (
       <div className="grid min-h-screen place-items-center">
         <Loading />
+      </div>
+    );
+  if (initialError && !user)
+    return (
+      <div className="mx-auto grid min-h-screen max-w-lg place-items-center px-5">
+        <ErrorNotice message={initialError} retry={() => void checkSession()} />
       </div>
     );
   if (!user)
@@ -411,6 +425,12 @@ export function App() {
             />
           )}
           {page === "members" && user.role === "admin" && <MembersPage />}
+          {page === "members" && user.role !== "admin" && (
+            <ErrorNotice
+              message="Admin access required."
+              retry={() => navigate("overview")}
+            />
+          )}
           {page === "api-keys" && <KeysPage user={user} />}
           {page === "audit" && <AuditPage user={user} />}
           {page === "connect" && <ConnectPage />}

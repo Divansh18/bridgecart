@@ -11,6 +11,7 @@ import {
   SectionTitle,
 } from "@/components/Feedback";
 import { endpoints, type ApiKey, type Member, type User } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 
 export function KeysPage({ user }: { user: User }) {
   const [members, setMembers] = useState<Member[]>([]);
@@ -18,6 +19,7 @@ export function KeysPage({ user }: { user: User }) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [name, setName] = useState("");
   const [created, setCreated] = useState("");
+  const [copied, setCopied] = useState(false);
   const [target, setTarget] = useState<ApiKey | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +52,7 @@ export function KeysPage({ user }: { user: User }) {
     setBusy(true);
     setError("");
     setCreated("");
+    setCopied(false);
     try {
       const result = await endpoints.createKey(name, selected);
       setCreated(result.key);
@@ -158,10 +161,22 @@ export function KeysPage({ user }: { user: User }) {
                   type="button"
                   variant="outline"
                   aria-label="Copy new API key"
-                  onClick={() => void navigator.clipboard.writeText(created)}
+                  onClick={() =>
+                    void copyText(created)
+                      .then(() => setCopied(true))
+                      .catch((err) => setError(err.message))
+                  }
                 >
                   <Copy className="size-4" />
                 </Button>
+                {copied && (
+                  <span
+                    role="status"
+                    className="self-center text-xs text-emerald-800"
+                  >
+                    Copied
+                  </span>
+                )}
               </div>
               <Button
                 className="mt-3"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useDialogKeyboard } from "@/lib/useDialogKeyboard";
 import { AlertCircle, LoaderCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -59,6 +60,7 @@ export function ErrorNotice({
     </div>
   );
 }
+
 export function ConfirmDialog({
   title,
   description,
@@ -76,6 +78,7 @@ export function ConfirmDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useDialogKeyboard(onClose, busy);
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"
@@ -84,6 +87,7 @@ export function ConfirmDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
