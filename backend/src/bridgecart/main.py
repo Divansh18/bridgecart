@@ -12,6 +12,9 @@ from bridgecart.auth.routes import router as auth_router
 from bridgecart.core.config import Settings, get_settings
 from bridgecart.core.logging import configure_logging
 from bridgecart.db.session import create_session_factory
+from bridgecart.gateway.mcp import create_gateway_mcp
+from bridgecart.gateway.routes import router as gateway_router
+from bridgecart.gateway.service import Gateway
 from bridgecart.health.routes import router as health_router
 from bridgecart.members.routes import router as members_router
 
@@ -20,17 +23,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configuration = settings or get_settings()
     configure_logging(configuration.log_level)
     engine, session_factory = create_session_factory(configuration)
+    gateway = Gateway(configuration, session_factory) if configuration.gateway_enabled else None
+    mcp_server, mcp_app = create_gateway_mcp(gateway, session_factory) if gateway else (None, None)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        yield
-        await engine.dispose()
+        try:
+            if mcp_server:
+                async with mcp_server.session_manager.run():
+                    yield
+            else:
+                yield
+        finally:
+            await engine.dispose()
 
     app = FastAPI(title="BridgeCart API", version="0.1.0", lifespan=lifespan)
     app.state.settings = configuration
     app.state.engine = engine
     app.state.session_factory = session_factory
     app.state.login_limiter = LoginLimiter()
+    app.state.gateway = gateway
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request, exc: RequestValidationError):  # type: ignore[no-untyped-def]
@@ -51,6 +63,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(members_router)
     app.include_router(api_keys_router)
+    if gateway and mcp_app:
+        app.include_router(gateway_router)
+        app.mount("/", mcp_app)
     return app
 
 

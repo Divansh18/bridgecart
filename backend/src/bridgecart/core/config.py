@@ -1,6 +1,7 @@
 from functools import lru_cache
 
-from pydantic import Field, PostgresDsn, field_validator, model_validator
+from cryptography.fernet import Fernet
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,12 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     session_ttl_hours: int = Field(default=12, ge=1, le=168)
     invitation_ttl_hours: int = Field(default=72, ge=1, le=168)
+    gateway_enabled: bool = False
+    upstream_encryption_key: SecretStr | None = None
+    gateway_allowed_urls: str = ""
+    gateway_discovery_timeout: float = Field(default=5, gt=0, le=30)
+    gateway_call_timeout: float = Field(default=12, gt=0, le=60)
+    gateway_cache_seconds: float = Field(default=15, ge=0, le=300)
 
     @field_validator("database_url")
     @classmethod
@@ -40,6 +47,13 @@ class Settings(BaseSettings):
             raise ValueError("cookie_samesite must be lax, strict, or none")
         if (self.stage == "production" or self.cookie_samesite == "none") and not self.cookie_secure:
             raise ValueError("secure cookies are required for this configuration")
+        if self.gateway_enabled and (not self.upstream_encryption_key or not self.gateway_allowed_urls):
+            raise ValueError("gateway requires encryption key and allowed URLs")
+        if self.gateway_enabled and self.upstream_encryption_key:
+            try:
+                Fernet(self.upstream_encryption_key.get_secret_value().encode())
+            except (ValueError, TypeError) as exc:
+                raise ValueError("gateway encryption key is invalid") from exc
         return self
 
 

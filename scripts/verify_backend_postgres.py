@@ -75,7 +75,7 @@ def main() -> int:
             [
                 str(ROOT / "backend/.venv/bin/pytest"),
                 "-q",
-                "backend/tests/integration/test_team_access_postgres.py",
+                "backend/tests/integration",
             ],
             cwd=ROOT,
             env=environment,

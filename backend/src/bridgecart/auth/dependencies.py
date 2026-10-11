@@ -78,6 +78,18 @@ AdminMutation = Annotated[SessionActor, Depends(admin_mutation)]
 
 async def authenticate_api_key(authorization: str | None, db: AsyncSession) -> User:
     """Reusable for the future gateway; checks revocation and user activity per request."""
+    actor = await authenticate_api_key_actor(authorization, db)
+    return actor.user
+
+
+@dataclass
+class ApiKeyActor:
+    user: User
+    key: ApiKey
+
+
+async def authenticate_api_key_actor(authorization: str | None, db: AsyncSession) -> ApiKeyActor:
+    """Recheck both rows for every transport request and every tool execution."""
     if not authorization or not authorization.startswith("Bearer bck_"):
         raise HTTPException(status_code=401, detail="Invalid API key")
     raw = authorization.removeprefix("Bearer ")
@@ -89,4 +101,4 @@ async def authenticate_api_key(authorization: str | None, db: AsyncSession) -> U
     found = row.one_or_none()
     if found is None or found[0].revoked_at is not None or not found[1].active:
         raise HTTPException(status_code=401, detail="Invalid API key")
-    return found[1]
+    return ApiKeyActor(user=found[1], key=found[0])

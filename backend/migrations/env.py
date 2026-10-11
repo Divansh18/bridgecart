@@ -8,6 +8,7 @@ from sqlalchemy.pool import NullPool
 from bridgecart.auth import models  # noqa: F401  Register model metadata for Alembic.
 from bridgecart.core.config import get_settings
 from bridgecart.db.base import Base
+from bridgecart.gateway import models as gateway_models  # noqa: F401
 
 config = context.config
 if config.config_file_name:
