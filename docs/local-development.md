@@ -42,6 +42,18 @@ The local-path volumes bind to a k3d node. Pod replacement on that node retains 
 
 For foundation development, Node 22, Python 3.12, uv, and PostgreSQL are still required. Copy `.env.example` to `.env`, set `BRIDGECART_DATABASE_URL`, export it, then run `make install`, `make frontend`, and `make backend`. Use `make dashboard-deploy` to deploy the dashboard and updated backend through the same chart.
 
+## Anthropic key preparation
+
+Run this exact command in your own interactive terminal after `make store-cluster` and namespace setup:
+
+```sh
+make anthropic-secret
+```
+
+The helper prompts `ANTHROPIC_API_KEY:` with terminal echo disabled. It creates or updates `bridgecart/bridgecart-anthropic-api` in context `k3d-bridgecart`, preserving any other Secret data keys, labels, and annotations. It sends the manifest to `kubectl` on stdin; the key is never a command argument, a local file, a Helm value, or printed output. It refuses noninteractive input and unsafe existing Secret types. Rerun the same command to rotate the value intentionally. Do not paste the key into Codex chat or put it in `.env`, shell history, values files, or logs. Kubernetes Secret readers and the backend process when enabled can still access the value; apply suitable RBAC and cluster encryption controls.
+
+The chart leaves `backend.anthropic.enabled: false` until a key has been entered and a reviewed model ID is selected for milestone six. Set `backend.anthropic.enabled: true` and `backend.anthropic.model` in local values for a future backend deployment. The Deployment then injects `ANTHROPIC_API_KEY` through a `secretKeyRef` and `BRIDGECART_CLAUDE_MODEL` as ordinary configuration. The migration Job does not receive the Anthropic key. These settings do not add a chat route or call Anthropic in this milestone.
+
 ## MCP service
 
 After the store is ready, run:

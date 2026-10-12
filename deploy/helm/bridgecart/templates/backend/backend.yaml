@@ -44,6 +44,7 @@ spec:
             - {name: http, containerPort: 8000}
           env:
             {{- include "bridgecart.backendEnv" . | nindent 12 }}
+            {{- include "bridgecart.backendAnthropicEnv" . | nindent 12 }}
           startupProbe:
             httpGet: {path: /health/live, port: http}
             periodSeconds: 3

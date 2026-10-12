@@ -63,6 +63,7 @@
         "ingress",
         "resources",
         "migrationResources",
+        "anthropic",
         "gateway"
       ],
       "properties": {
@@ -104,6 +105,16 @@
         "corsOrigins": {
           "type": "string",
           "minLength": 1
+        },
+        "anthropic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "secretName", "model"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "secretName": {"type": "string", "minLength": 1},
+            "model": {"type": "string"}
+          }
         },
         "ingress": {
           "type": "object",

@@ -21,6 +21,10 @@ backend:
   cookieSecure: false
   cookieSameSite: lax
   corsOrigins: http://localhost:5173
+  anthropic:
+    enabled: false
+    secretName: bridgecart-anthropic-api
+    model: ""
   gateway:
     enabled: false
     encryptionSecret: bridgecart-upstream-encryption

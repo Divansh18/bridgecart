@@ -23,6 +23,22 @@ class Settings(BaseSettings):
     gateway_discovery_timeout: float = Field(default=5, gt=0, le=30)
     gateway_call_timeout: float = Field(default=12, gt=0, le=60)
     gateway_cache_seconds: float = Field(default=15, ge=0, le=300)
+    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    claude_model: str | None = None
+
+    @field_validator("anthropic_api_key")
+    @classmethod
+    def validate_anthropic_api_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            raise ValueError("anthropic_api_key must be non-blank")
+        return value
+
+    @field_validator("claude_model")
+    @classmethod
+    def validate_claude_model(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or value != value.strip()):
+            raise ValueError("claude_model must be a non-blank model identifier")
+        return value
 
     @field_validator("database_url")
     @classmethod

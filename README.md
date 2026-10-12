@@ -44,6 +44,8 @@ The local demo is made public and uses Shop as its homepage on its first bootstr
 
 Run `make check` for existing frontend/backend/MCP checks and Helm lint/template. The local-path PVCs survive pod replacement and are retained on Helm uninstall, but are tied to their k3d node and do not replace backups. Read [architecture](docs/architecture.md), [production](docs/production.md), and the [runbook](docs/runbook.md) before upgrades or cleanup.
 
+For milestone-six preparation, run `make anthropic-secret` in your own interactive terminal to enter `ANTHROPIC_API_KEY` with hidden input. This creates or updates the dedicated local Kubernetes Secret without printing the key. Anthropic injection is opt-in and chat is not implemented; see [local development](docs/local-development.md#anthropic-key-preparation).
+
 Only the backend gateway is exposed at [the local MCP endpoint](http://api.bridgecart.local:8088/mcp). Upstream MCP Services have no public Ingress. The user's gateway API key is separate from each upstream bearer and the WooCommerce REST key. See [gateway setup](docs/local-development.md#gateway-milestone-4b) and [architecture](docs/architecture.md#gateway-milestone-4b).
 
 The team API uses an opaque HttpOnly session cookie and a separate CSRF cookie/header for mutations. Gateway API keys are hashed in PostgreSQL and are never accepted as browser sessions. See [team access setup](docs/local-development.md#team-api-milestone-4a) and [architecture](docs/architecture.md#team-access-milestone-4a).
