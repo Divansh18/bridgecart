@@ -34,6 +34,7 @@ format-check:
 	@for project in $(PYTHON_PROJECTS); do (cd $$project && uv run --locked ruff format --check .) || exit $$?; done
 
 test:
+	cd frontend && npm run test:chat
 	@for project in $(PYTHON_PROJECTS); do (cd $$project && uv run --locked pytest) || exit $$?; done
 
 build:

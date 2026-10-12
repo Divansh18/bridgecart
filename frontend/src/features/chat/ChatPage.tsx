@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Panel, SectionTitle, inputClass } from "@/components/Feedback";
 import { endpoints, type ChatHistory, type ChatTrace } from "@/lib/api";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 
 type Entry = {
   role: "user" | "assistant";
@@ -107,11 +108,15 @@ export function ChatPage() {
                 className={`flex ${entry.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[82%] ${entry.role === "user" ? "bg-primary text-white" : "border border-border bg-white text-foreground"}`}
+                  className={`min-w-0 max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[82%] ${entry.role === "user" ? "bg-primary text-white" : "border border-border bg-white text-foreground"}`}
                 >
-                  <p className="whitespace-pre-wrap break-words">
-                    {entry.content}
-                  </p>
+                  {entry.role === "assistant" ? (
+                    <AssistantMarkdown content={entry.content} />
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">
+                      {entry.content}
+                    </p>
+                  )}
                   {entry.traces && entry.traces.length > 0 && (
                     <div className="mt-4 space-y-2 border-t border-border pt-3 text-xs">
                       <p className="font-semibold uppercase tracking-wide text-slate-500">
