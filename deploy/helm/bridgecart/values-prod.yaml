@@ -1,7 +1,7 @@
 stage: production
 frontend:
   enabled: true
-  image: registry.example.com/bridgecart/frontend:0.6.3
+  image: registry.example.com/bridgecart/frontend:0.7.0
   imagePullPolicy: Always
   host: app.example.com
   gatewayUrl: https://api.example.com/mcp
@@ -9,7 +9,7 @@ frontend:
     tls: {enabled: true, secretName: replace-with-existing-dashboard-tls-secret}
 backend:
   enabled: true
-  image: registry.example.com/bridgecart/backend:0.6.0
+  image: registry.example.com/bridgecart/backend:0.7.0
   imagePullPolicy: Always
   host: api.example.com
   databaseSecret: replace-with-existing-postgres-secret

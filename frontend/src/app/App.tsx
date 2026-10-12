@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageSquareText,
   PlugZap,
   RefreshCw,
   ServerCog,
@@ -28,6 +29,7 @@ import { KeysPage } from "@/features/api-keys/KeysPage";
 import { MembersPage } from "@/features/members/MembersPage";
 import { ServersPage } from "@/features/servers/ServersPage";
 import { ConnectPage } from "@/features/connect/ConnectPage";
+import { ChatPage } from "@/features/chat/ChatPage";
 import {
   ApiError,
   endpoints,
@@ -37,7 +39,13 @@ import {
 } from "@/lib/api";
 
 type Page =
-  "overview" | "servers" | "members" | "api-keys" | "audit" | "connect";
+  | "overview"
+  | "servers"
+  | "members"
+  | "api-keys"
+  | "audit"
+  | "connect"
+  | "chat";
 const pageNames: Page[] = [
   "overview",
   "servers",
@@ -45,6 +53,7 @@ const pageNames: Page[] = [
   "api-keys",
   "audit",
   "connect",
+  "chat",
 ];
 function pathPage(): Page {
   const segment = location.pathname.slice(1) as Page;
@@ -57,6 +66,7 @@ const nav = [
   { id: "api-keys", name: "API keys", icon: KeyRound },
   { id: "audit", name: "Audit log", icon: Activity },
   { id: "connect", name: "Connect", icon: PlugZap },
+  { id: "chat", name: "Chat", icon: MessageSquareText },
 ] as const;
 
 export function App() {
@@ -434,6 +444,7 @@ export function App() {
           {page === "api-keys" && <KeysPage user={user} />}
           {page === "audit" && <AuditPage user={user} />}
           {page === "connect" && <ConnectPage />}
+          {page === "chat" && <ChatPage />}
         </main>
       </div>
     </div>

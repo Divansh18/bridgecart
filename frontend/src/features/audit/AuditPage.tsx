@@ -109,7 +109,9 @@ export function AuditPage({ user }: { user: User }) {
                       {row.user_email}
                     </span>
                     <span className="mt-1 block text-xs text-slate-400">
-                      Key #{row.api_key_id}
+                      {row.credential_type === "session_delegation"
+                        ? `Chat session #${row.session_id}`
+                        : `Key #${row.api_key_id}`}
                     </span>
                   </td>
                   <td className="px-5 py-4">

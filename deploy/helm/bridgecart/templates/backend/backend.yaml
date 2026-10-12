@@ -5,6 +5,8 @@ metadata:
   name: {{ include "bridgecart.fullname" . }}-backend
   labels:
     {{- include "bridgecart.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/service.serverstransport: {{ printf "%s-%s-backend-chat@kubernetescrd" .Release.Namespace (include "bridgecart.fullname" .) | quote }}
 spec:
   type: ClusterIP
   selector:
@@ -65,6 +67,15 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
+---
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-backend-chat
+spec:
+  forwardingTimeouts:
+    responseHeaderTimeout: 60s
+    readTimeout: 60s
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

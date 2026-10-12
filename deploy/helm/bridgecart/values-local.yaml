@@ -4,6 +4,9 @@ frontend:
   gatewayUrl: http://api.bridgecart.local:8088/mcp
 backend:
   enabled: true
+  anthropic:
+    enabled: true
+    model: claude-sonnet-4-6
   gateway:
     enabled: true
   host: api.bridgecart.local

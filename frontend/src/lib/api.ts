@@ -37,7 +37,10 @@ export type AuditRow = {
   id: number;
   user_id: number;
   user_email: string;
-  api_key_id: number;
+  api_key_id: number | null;
+  session_id: number | null;
+  credential_type: "api_key" | "session_delegation";
+  correlation_id: string | null;
   server_id: string | null;
   server_name: string | null;
   original_tool_name: string | null;
@@ -55,6 +58,20 @@ export type ServerInput = {
   header_name?: string | null;
   credential?: string;
 };
+
+export type ChatTrace = {
+  server: string;
+  tool: string;
+  status: "success" | "error" | "uncertain";
+  duration_ms: number;
+  detail: string;
+};
+export type ChatResponse = {
+  reply: string;
+  traces: ChatTrace[];
+  correlation_id: string;
+};
+export type ChatHistory = { role: "user" | "assistant"; content: string };
 
 export class ApiError extends Error {
   constructor(
@@ -187,4 +204,6 @@ export const endpoints = {
     api<AuditRow[]>(
       `/audit?${new URLSearchParams({ page: String(page), per_page: String(perPage), ...(userId ? { user_id: String(userId) } : {}) })}`,
     ),
+  chat: (message: string, history: ChatHistory[]) =>
+    api<ChatResponse>("/chat", { method: "POST", body: { message, history } }),
 };

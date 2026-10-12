@@ -66,7 +66,7 @@ store-deploy:
 	inventory_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-inventory-mcp >/dev/null 2>&1 && echo true || echo false); \
 	shipping_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-shipping-mcp >/dev/null 2>&1 && echo true || echo false); \
 	backend_image=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-backend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null); \
-	backend_image=$${backend_image:-bridgecart/backend:0.6.0}; \
+	backend_image=$${backend_image:-bridgecart/backend:0.7.0}; \
 	frontend_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-frontend >/dev/null 2>&1 && echo true || echo false); \
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=$$frontend_enabled --set woocommerceMcp.enabled=$$mcp_enabled --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
 
@@ -94,7 +94,7 @@ mcp-deploy: mcp-secrets mcp-image
 	inventory_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-inventory-mcp >/dev/null 2>&1 && echo true || echo false); \
 	shipping_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-shipping-mcp >/dev/null 2>&1 && echo true || echo false); \
 	backend_image=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-backend -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null); \
-	backend_image=$${backend_image:-bridgecart/backend:0.6.0}; \
+	backend_image=$${backend_image:-bridgecart/backend:0.7.0}; \
 	frontend_enabled=$$(kubectl --context k3d-bridgecart -n bridgecart get deployment bridgecart-frontend >/dev/null 2>&1 && echo true || echo false); \
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=$$frontend_enabled --set backend.enabled=$$backend_enabled --set postgres.enabled=$$postgres_enabled --set backend.gateway.enabled=$$inventory_enabled --set inventoryMcp.enabled=$$inventory_enabled --set shippingMcp.enabled=$$shipping_enabled --set-string backend.image=$$backend_image --wait --timeout 20m
 
@@ -107,8 +107,8 @@ backend-secrets:
 	python3 scripts/backend_secrets.py
 
 backend-image:
-	docker build -t bridgecart/backend:0.6.0 backend
-	k3d image import bridgecart/backend:0.6.0 -c bridgecart
+	docker build -t bridgecart/backend:0.7.0 backend
+	k3d image import bridgecart/backend:0.7.0 -c bridgecart
 
 backend-deploy: gateway-deploy
 
@@ -150,9 +150,9 @@ gateway-network-verify:
 	backend/.venv/bin/python scripts/verify_gateway_network.py
 
 dashboard-images:
-	docker build -t bridgecart/frontend:0.6.3 frontend
-	docker build -t bridgecart/backend:0.6.0 backend
-	k3d image import bridgecart/frontend:0.6.3 bridgecart/backend:0.6.0 -c bridgecart
+	docker build -t bridgecart/frontend:0.7.0 frontend
+	docker build -t bridgecart/backend:0.7.0 backend
+	k3d image import bridgecart/frontend:0.7.0 bridgecart/backend:0.7.0 -c bridgecart
 
 dashboard-deploy: dashboard-images
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=true --set store.bootstrap.enabled=false --wait --timeout 20m
