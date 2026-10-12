@@ -6,6 +6,12 @@ All local commands target `--context k3d-bridgecart` and namespace `bridgecart`;
 
 WordPress startup/liveness use a static file. WordPress readiness uses `/wp-login.php`; if it fails, inspect WordPress logs and MariaDB readiness. MariaDB probes use `healthcheck.sh`. PVCs must be `Bound`. Inspect `kubectl --context k3d-bridgecart -n bridgecart get pods,pvc,events` and check volume ownership if a Job cannot write WordPress files. The official Apache image prepares the volume as UID/GID 33; the WP-CLI Job explicitly runs as 33:33 because its Alpine default differs.
 
+## Scheduled actions
+
+Check `kubectl --context k3d-bridgecart -n bridgecart get cronjob bridgecart-wordpress-cron` and `kubectl --context k3d-bridgecart -n bridgecart get jobs --sort-by=.metadata.creationTimestamp`. Inspect a failed Job's status, pod events, and its safe summary log with `kubectl --context k3d-bridgecart -n bridgecart logs job/<job-name>`. The Job runs every five minutes with `concurrencyPolicy: Forbid`, a 120-second start window, a 180-second run deadline, no immediate retry, and at most two batches of 20 Action Scheduler actions. It waits briefly for MariaDB network policy to apply before opening a connection. It uses the existing store Secret and WordPress PVC, not a copy of either. Natural WordPress WP-Cron spawning is disabled only while `store.cron.enabled=true`.
+
+In WooCommerce admin, use **Status → Scheduled Actions** to inspect pending and failed hooks and their logs. Do not delete overdue or failed actions to clear a notice. A completed Job can still leave a particular action failed; investigate its hook and plugin log. If Jobs stop, check CronJob suspension, the RWO PVC's WordPress-node placement, MariaDB readiness, DNS, public HTTPS egress, and the `bridgecart-wordpress-cron-egress` and `bridgecart-mariadb-access` policies. A failed Job remains for inspection until the CronJob history limit prunes it; the next schedule is the bounded retry opportunity. Do not run a second external cron runner concurrently. For an upgrade or rollback, review whether the target values enable the CronJob so visitor-triggered WP-Cron and the scheduled runner are not both disabled.
+
 To replace pods without deleting PVCs:
 
 ```sh
