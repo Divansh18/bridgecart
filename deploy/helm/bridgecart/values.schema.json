@@ -247,6 +247,7 @@
         "wordpress",
         "mariadb",
         "bootstrap",
+        "cron",
         "ingress",
         "networkPolicy"
       ],
@@ -378,6 +379,20 @@
             "resources": {
               "$ref": "#/definitions/resources"
             }
+          }
+        },
+        "cron": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "schedule", "startingDeadlineSeconds", "activeDeadlineSeconds", "batchSize", "batches", "resources"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "schedule": {"type": "string", "minLength": 9},
+            "startingDeadlineSeconds": {"type": "integer", "minimum": 10, "maximum": 3600},
+            "activeDeadlineSeconds": {"type": "integer", "minimum": 30, "maximum": 3600},
+            "batchSize": {"type": "integer", "minimum": 1, "maximum": 100},
+            "batches": {"type": "integer", "minimum": 1, "maximum": 10},
+            "resources": {"$ref": "#/definitions/resources"}
           }
         },
         "ingress": {

@@ -1,7 +1,7 @@
 stage: production
 frontend:
   enabled: true
-  image: registry.example.com/bridgecart/frontend:0.7.0
+  image: registry.example.com/bridgecart/frontend:0.7.1
   imagePullPolicy: Always
   host: app.example.com
   gatewayUrl: https://api.example.com/mcp
@@ -62,5 +62,7 @@ store:
     enableDemoShipping: false
     makeStoreLive: false
     makeShopHomepage: false
+  cron:
+    enabled: true
   ingress:
     tls: {enabled: true, secretName: replace-with-existing-tls-secret}

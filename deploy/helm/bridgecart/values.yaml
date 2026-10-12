@@ -1,7 +1,7 @@
 stage: local
 frontend:
   enabled: false
-  image: bridgecart/frontend:0.7.0
+  image: bridgecart/frontend:0.7.1
   imagePullPolicy: IfNotPresent
   host: app.bridgecart.local
   gatewayUrl: http://api.bridgecart.local:8088/mcp
@@ -116,6 +116,16 @@ store:
     makeShopHomepage: false
     resources:
       requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 512Mi}
+  cron:
+    enabled: false
+    schedule: "*/5 * * * *"
+    startingDeadlineSeconds: 120
+    activeDeadlineSeconds: 180
+    batchSize: 20
+    batches: 2
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
       limits: {cpu: 500m, memory: 512Mi}
   ingress:
     className: traefik

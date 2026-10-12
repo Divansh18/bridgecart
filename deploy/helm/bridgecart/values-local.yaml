@@ -37,5 +37,7 @@ store:
     enableDemoShipping: true
     makeStoreLive: true
     makeShopHomepage: true
+  cron:
+    enabled: true
   ingress:
     tls: {enabled: false, secretName: ""}

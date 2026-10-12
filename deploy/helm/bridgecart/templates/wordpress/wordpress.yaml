@@ -62,6 +62,10 @@ spec:
               containerPort: 80
           env:
             {{- include "bridgecart.wordpressEnv" . | nindent 12 }}
+            {{- if .Values.store.cron.enabled }}
+            - name: WORDPRESS_CONFIG_EXTRA
+              value: "define('DISABLE_WP_CRON', true);"
+            {{- end }}
           startupProbe:
             httpGet:
               path: /wp-includes/images/blank.gif

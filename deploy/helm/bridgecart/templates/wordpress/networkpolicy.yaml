@@ -10,7 +10,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [wordpress, mariadb, bootstrap]
+        values: [wordpress, mariadb, bootstrap, wordpress-cron]
   policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
@@ -31,7 +31,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/component
                 operator: In
-                values: [wordpress, bootstrap]
+                values: [wordpress, bootstrap, wordpress-cron]
       ports:
         - protocol: TCP
           port: 3306
@@ -82,6 +82,37 @@ spec:
       ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-wordpress-cron-egress
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bridgecart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wordpress-cron
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "bridgecart.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: mariadb
+      ports: [{protocol: TCP, port: 3306}]
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4]
+      ports: [{protocol: TCP, port: 443}]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

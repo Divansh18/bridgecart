@@ -1,0 +1,79 @@
+{{- if and .Values.store.enabled .Values.store.cron.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "bridgecart.fullname" . }}-wordpress-cron
+  labels:
+    {{- include "bridgecart.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.store.cron.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ .Values.store.cron.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ .Values.store.cron.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "bridgecart.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: wordpress-cron
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 15
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      {{- include "bridgecart.selectorLabels" . | nindent 22 }}
+                      app.kubernetes.io/component: wordpress
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 33
+            runAsGroup: 33
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: wp-cli
+              image: {{ .Values.store.bootstrap.image | quote }}
+              imagePullPolicy: IfNotPresent
+              workingDir: /var/www/html
+              command: [/bin/sh, -ec]
+              args:
+                - |
+                  ready=0
+                  for attempt in $(seq 1 15); do
+                    if php -r '$host = explode(":", getenv("WORDPRESS_DB_HOST"))[0]; $socket = @fsockopen($host, 3306, $errno, $error, 2); exit($socket ? 0 : 1);' >/dev/null 2>&1; then
+                      ready=1
+                      break
+                    fi
+                    sleep 2
+                  done
+                  [ "$ready" -eq 1 ] || { echo 'MariaDB network path unavailable after bounded wait'; exit 1; }
+                  wp cron event run --due-now --quiet >/dev/null 2>&1 || { echo 'WP-Cron due-event run failed'; exit 1; }
+                  wp action-scheduler run --batch-size={{ .Values.store.cron.batchSize }} --batches={{ .Values.store.cron.batches }} --quiet >/dev/null 2>&1 || { echo 'Action Scheduler run failed'; exit 1; }
+                  echo 'WordPress scheduled work completed'
+              env:
+                {{- include "bridgecart.wordpressEnv" . | nindent 16 }}
+                - {name: WORDPRESS_CONFIG_EXTRA, value: "define('DISABLE_WP_CRON', true);"}
+                - {name: HOME, value: /tmp}
+                - {name: WP_CLI_CACHE_DIR, value: /tmp/wp-cli-cache}
+              resources:
+                {{- toYaml .Values.store.cron.resources | nindent 16 }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: content, mountPath: /var/www/html}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: content
+              persistentVolumeClaim:
+                claimName: {{ include "bridgecart.fullname" . }}-wordpress-content
+            - name: tmp
+              emptyDir: {sizeLimit: 64Mi}
+{{- end }}

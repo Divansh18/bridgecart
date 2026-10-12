@@ -74,7 +74,7 @@ store-deploy:
 store-bootstrap: store-deploy
 
 store-status:
-	kubectl --context k3d-bridgecart -n bridgecart get pods,pvc,svc,ingress,networkpolicy,job
+	kubectl --context k3d-bridgecart -n bridgecart get pods,pvc,svc,ingress,networkpolicy,job,cronjob
 
 store-smoke:
 	python3 scripts/store_smoke.py
@@ -151,9 +151,9 @@ gateway-network-verify:
 	backend/.venv/bin/python scripts/verify_gateway_network.py
 
 dashboard-images:
-	docker build -t bridgecart/frontend:0.7.0 frontend
+	docker build -t bridgecart/frontend:0.7.1 frontend
 	docker build -t bridgecart/backend:0.7.0 backend
-	k3d image import bridgecart/frontend:0.7.0 bridgecart/backend:0.7.0 -c bridgecart
+	k3d image import bridgecart/frontend:0.7.1 bridgecart/backend:0.7.0 -c bridgecart
 
 dashboard-deploy: dashboard-images
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=true --set store.bootstrap.enabled=false --wait --timeout 20m
