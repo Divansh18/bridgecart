@@ -23,7 +23,7 @@
 {{- if .Values.backend.anthropic.enabled }}
 - name: ANTHROPIC_API_KEY
   valueFrom:
-    secretKeyRef: {name: {{ .Values.backend.anthropic.secretName | quote }}, key: ANTHROPIC_API_KEY}
+    secretKeyRef: {name: {{ .Values.backend.anthropic.secretName | quote }}, key: ANTHROPIC_API_KEY, optional: true}
 {{- end }}
 {{- if .Values.backend.anthropic.model }}
 - {name: BRIDGECART_CLAUDE_MODEL, value: {{ .Values.backend.anthropic.model | quote }}}

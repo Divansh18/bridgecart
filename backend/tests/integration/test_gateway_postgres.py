@@ -332,6 +332,14 @@ async def test_session_delegation_transport_logout_deactivation_and_audit(
             assert (
                 await browser_b.post("/auth/login", json={"email": "b@example.com", "password": "private-password-B"})
             ).status_code == 200
+            assert (await browser_a.post("/chat", json={"message": "hello"})).status_code == 403
+            assert (
+                await browser_a.post(
+                    "/chat",
+                    headers={"X-CSRF-Token": browser_a.cookies["bridgecart_csrf"]},
+                    json={"message": "hello"},
+                )
+            ).status_code == 503
             async with app.state.session_factory() as db:
                 session_a = await db.scalar(
                     select(LoginSession).where(
@@ -378,11 +386,23 @@ async def test_session_delegation_transport_logout_deactivation_and_audit(
                         "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
                     }
                     assert all(row.credential_type == "session_delegation" and row.api_key_id is None for row in rows)
-                assert (
-                    await browser_a.post("/auth/logout", headers={"X-CSRF-Token": browser_a.cookies["bridgecart_csrf"]})
-                ).status_code == 200
-                with pytest.raises(ExceptionGroup):
-                    await call(token_a)
+                async with httpx2.AsyncClient(
+                    transport=httpx2.ASGITransport(app=app, client=("127.0.0.1", 123)),
+                    headers={"Authorization": "Bearer " + token_a},
+                ) as existing_transport:
+                    async with streamable_http_client(
+                        "http://test/mcp", http_client=existing_transport, terminate_on_close=False
+                    ) as streams:
+                        async with ClientSession(*streams) as existing_client:
+                            await existing_client.initialize()
+                            assert not (await existing_client.call_tool(public, {})).is_error
+                            assert (
+                                await browser_a.post(
+                                    "/auth/logout", headers={"X-CSRF-Token": browser_a.cookies["bridgecart_csrf"]}
+                                )
+                            ).status_code == 200
+                            with pytest.raises(MCPError):
+                                await existing_client.call_tool(public, {})
                 assert not (await call(token_b)).is_error
                 async with app.state.session_factory() as db:
                     user_b_row = await db.get(User, user_b.id)

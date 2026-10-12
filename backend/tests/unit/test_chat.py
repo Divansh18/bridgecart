@@ -17,7 +17,7 @@ from bridgecart.auth.dependencies import SessionActor
 from bridgecart.auth.models import LoginSession, User
 from bridgecart.chat import service
 from bridgecart.core.config import Settings
-from bridgecart.gateway.delegation import issue_delegation
+from bridgecart.gateway.delegation import authenticate_delegation, issue_delegation
 
 
 def actor() -> SessionActor:
@@ -47,6 +47,22 @@ def test_delegation_is_short_lived_and_signed() -> None:
     payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
     assert payload["u"] == 7 and payload["s"] == 11
     assert 0 < payload["e"] - int(time.time()) <= 120
+
+
+@pytest.mark.asyncio
+async def test_expired_or_tampered_delegation_is_rejected_before_database() -> None:
+    configuration = settings()
+    subject = actor()
+    subject.session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    expired = issue_delegation(configuration, subject, "00000000-0000-0000-0000-000000000001")
+    with pytest.raises(HTTPException) as error:
+        await authenticate_delegation(expired, configuration, None)  # type: ignore[arg-type]
+    assert error.value.status_code == 401
+    subject.session.expires_at = datetime.now(UTC) + timedelta(hours=1)
+    token = issue_delegation(configuration, subject, "00000000-0000-0000-0000-000000000001")
+    with pytest.raises(HTTPException) as error:
+        await authenticate_delegation(token[:-1] + ("A" if token[-1] != "A" else "B"), configuration, None)  # type: ignore[arg-type]
+    assert error.value.status_code == 401
 
 
 class FakeSession:
@@ -172,3 +188,36 @@ async def test_truncated_response_does_not_dispatch(monkeypatch: pytest.MonkeyPa
     with pytest.raises(HTTPException, match="truncated"):
         await service.chat_turn(app_with_provider(settings(), provider), actor(), "question", [])
     assert fake.calls == []
+
+
+@pytest.mark.asyncio
+async def test_tool_error_is_returned_to_claude_and_not_claimed_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    name = "bc_" + "0" * 32 + "_" + "a" * 24
+    fake = FakeSession(
+        [Tool(name=name, title="lookup_inventory", inputSchema={"type": "object"})],
+        [CallToolResult(content=[TextContent(type="text", text="Server is disabled")], is_error=True)],
+    )
+    install_fake_gateway(monkeypatch, fake)
+    provider = FakeProvider(
+        [SimpleNamespace(stop_reason="tool_use", content=[tool_use("toolu_3", name)]), reply("Unavailable")]
+    )
+    result = await service.chat_turn(app_with_provider(settings(), provider), actor(), "lookup", [])
+    assert result["traces"][0]["status"] == "error"
+    assert result["traces"][0]["tool"] == "lookup_inventory"
+    tool_result = provider.requests[1]["messages"][-1]["content"][0]
+    assert tool_result["is_error"] is True and tool_result["tool_use_id"] == "toolu_3"
+
+
+@pytest.mark.asyncio
+async def test_invalid_arguments_reach_gateway_rejection_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    name = "bc_" + "0" * 32 + "_" + "a" * 24
+    fake = FakeSession(
+        [Tool(name=name, inputSchema={"type": "object"})],
+        [CallToolResult(content=[TextContent(type="text", text="Tool arguments are invalid")], is_error=True)],
+    )
+    install_fake_gateway(monkeypatch, fake)
+    provider = FakeProvider(
+        [SimpleNamespace(stop_reason="tool_use", content=[tool_use("toolu_4", name, "bad")]), reply("Invalid")]
+    )
+    await service.chat_turn(app_with_provider(settings(), provider), actor(), "lookup", [])
+    assert fake.calls == [(name, {"__bridgecart_invalid_arguments__": True})]

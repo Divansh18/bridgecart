@@ -87,8 +87,10 @@ async def _call_tool(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     started = time.monotonic()
     server = names.get(name[3:35], "Unknown server")
-    original = mapping[name].name if name in mapping else name
+    original = (mapping[name].title or name) if name in mapping else name
     safe_args = arguments if isinstance(arguments, dict) else {"__bridgecart_invalid_arguments__": True}
+    if len(json.dumps(safe_args).encode()) > 65536:
+        safe_args = {"__bridgecart_invalid_arguments__": True}
     try:
         result = await session.call_tool(name, safe_args, read_timeout_seconds=12)
         content = _result_text(result)
@@ -151,12 +153,13 @@ async def _run_loop(
                 calls = 0
                 for round_number in range(MAX_ROUNDS + 1):
                     try:
+                        options: dict[str, Any] = {"tools": definitions} if definitions else {}
                         response = await app.state.chat_client.messages.create(
                             model=settings.claude_model,
                             max_tokens=MAX_OUTPUT_TOKENS,
                             system=system,
                             messages=messages,
-                            tools=definitions,
+                            **options,
                         )
                     except anthropic.RateLimitError:
                         raise HTTPException(429, "Claude rate limit reached; retry later") from None

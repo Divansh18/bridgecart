@@ -164,7 +164,7 @@ class Gateway:
 
     async def list_tools(self) -> list[Tool]:
         return [
-            tool.model_copy(update={"name": public})
+            tool.model_copy(update={"name": public, "title": tool.name[:200]})
             for _, discovery in await self.catalog()
             for public, tool in discovery.tools.items()
         ]
