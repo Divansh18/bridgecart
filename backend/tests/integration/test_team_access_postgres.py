@@ -246,7 +246,7 @@ async def test_team_access_against_migrated_postgres(
             assert expired_result.status_code == 400
         async with app.state.session_factory() as db:
             revision = await db.scalar(text("SELECT version_num FROM alembic_version"))
-            assert revision == "20261011_01"
+            assert revision == "20261012_01"
     await app.state.engine.dispose()
     output = capsys.readouterr()
     for secret in (admin_password, member_password, invitation_token, raw_key, admin_key, active_key):

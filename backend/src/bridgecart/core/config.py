@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     gateway_cache_seconds: float = Field(default=15, ge=0, le=300)
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     claude_model: str | None = None
+    chat_total_timeout: float = Field(default=45, gt=5, le=55)
+    chat_provider_timeout: float = Field(default=18, gt=1, le=30)
 
     @field_validator("anthropic_api_key")
     @classmethod

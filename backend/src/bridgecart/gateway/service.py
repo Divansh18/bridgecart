@@ -15,8 +15,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridgecart.auth.dependencies import ApiKeyActor
-from bridgecart.auth.models import ApiKey, User, utc_now
+from bridgecart.auth.models import ApiKey, LoginSession, User, utc_now
 from bridgecart.core.config import Settings
+from bridgecart.gateway.delegation import DelegatedActor
 from bridgecart.gateway.models import ToolAudit, UpstreamServer
 from bridgecart.gateway.security import cipher
 from bridgecart.gateway.transport import LimitedTransport, ResponseTooLarge, UpstreamRedirect
@@ -168,22 +169,40 @@ class Gateway:
             for public, tool in discovery.tools.items()
         ]
 
-    async def execute(self, actor: ApiKeyActor, public: str, arguments: dict[str, Any]) -> CallToolResult:
+    async def execute(
+        self, actor: ApiKeyActor | DelegatedActor, public: str, arguments: dict[str, Any]
+    ) -> CallToolResult:
         # The shared execution boundary does not trust a previously validated actor.
         try:
             async with self.factory() as db:
-                actor_query = await db.execute(
-                    select(ApiKey, User).join(User, User.id == ApiKey.user_id).where(ApiKey.id == actor.key.id)
-                )
-                matched = actor_query.one_or_none()
-                if (
-                    matched is None
-                    or matched[0].revoked_at is not None
-                    or not matched[1].active
-                    or matched[1].id != actor.user.id
-                ):
-                    return safe_result("authentication", "API key is no longer valid")
-                actor = ApiKeyActor(user=matched[1], key=matched[0])
+                if isinstance(actor, ApiKeyActor):
+                    api_query = await db.execute(
+                        select(ApiKey, User).join(User, User.id == ApiKey.user_id).where(ApiKey.id == actor.key.id)
+                    )
+                    api_match = api_query.one_or_none()
+                    if (
+                        api_match is None
+                        or api_match[0].revoked_at is not None
+                        or not api_match[1].active
+                        or api_match[1].id != actor.user.id
+                    ):
+                        return safe_result("authentication", "API key is no longer valid")
+                    actor = ApiKeyActor(user=api_match[1], key=api_match[0])
+                else:
+                    session_query = await db.execute(
+                        select(LoginSession, User)
+                        .join(User, User.id == LoginSession.user_id)
+                        .where(LoginSession.id == actor.session_id, User.id == actor.user.id)
+                    )
+                    session_match = session_query.one_or_none()
+                    if (
+                        session_match is None
+                        or session_match[0].revoked_at is not None
+                        or session_match[0].expires_at <= utc_now()
+                        or not session_match[1].active
+                    ):
+                        return safe_result("authentication", "Delegated session is no longer valid")
+                    actor = DelegatedActor(session_match[1], session_match[0].id, actor.correlation_id)
         except Exception:
             return safe_result("authentication_unavailable", "Gateway authentication is unavailable")
         started = time.monotonic()
@@ -205,7 +224,10 @@ class Gateway:
                 audit = ToolAudit(
                     user_id=actor.user.id,
                     user_email=actor.user.email,
-                    api_key_id=actor.key.id,
+                    api_key_id=actor.key.id if isinstance(actor, ApiKeyActor) else None,
+                    session_id=actor.session_id if isinstance(actor, DelegatedActor) else None,
+                    credential_type="session_delegation" if isinstance(actor, DelegatedActor) else "api_key",
+                    correlation_id=actor.correlation_id if isinstance(actor, DelegatedActor) else None,
                     server_id=server.id if server else None,
                     server_name=server.name if server else None,
                     original_tool_name=None,
@@ -232,6 +254,8 @@ class Gateway:
                 raise GatewayFailure("unknown_tool", "Tool is unavailable")
             if len(json.dumps(arguments).encode()) > MAX_ARGUMENT_BYTES:
                 raise GatewayFailure("limits", "Tool arguments exceed size limit")
+            if arguments.get("__bridgecart_invalid_arguments__") is True:
+                raise GatewayFailure("invalid_arguments", "Tool arguments are invalid")
             # Recheck registry state after discovery; edits and disable take effect on cached calls.
             async with self.factory() as db:
                 current_server = await db.get(UpstreamServer, server.id)

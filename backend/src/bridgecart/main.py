@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,7 @@ from fastapi.responses import JSONResponse
 from bridgecart.api_keys.routes import router as api_keys_router
 from bridgecart.auth.rate_limit import LoginLimiter
 from bridgecart.auth.routes import router as auth_router
+from bridgecart.chat.routes import router as chat_router
 from bridgecart.core.config import Settings, get_settings
 from bridgecart.core.logging import configure_logging
 from bridgecart.db.session import create_session_factory
@@ -28,6 +30,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        chat_client = (
+            AsyncAnthropic(
+                api_key=configuration.anthropic_api_key.get_secret_value(),
+                timeout=configuration.chat_provider_timeout,
+                max_retries=0,
+            )
+            if configuration.anthropic_api_key and configuration.claude_model
+            else None
+        )
+        app.state.chat_client = chat_client
         try:
             if mcp_server:
                 async with mcp_server.session_manager.run():
@@ -35,6 +47,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             else:
                 yield
         finally:
+            if chat_client:
+                await chat_client.close()
             await engine.dispose()
 
     app = FastAPI(title="BridgeCart API", version="0.1.0", lifespan=lifespan)
@@ -63,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(members_router)
     app.include_router(api_keys_router)
+    app.include_router(chat_router)
     if gateway and mcp_app:
         app.include_router(gateway_router)
         app.mount("/", mcp_app)

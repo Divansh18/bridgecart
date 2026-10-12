@@ -19,11 +19,12 @@ from mcp.types import CallToolResult, TextContent, Tool
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
-from bridgecart.auth.dependencies import authenticate_api_key_actor
-from bridgecart.auth.models import ApiKey, User, utc_now
+from bridgecart.auth.dependencies import SessionActor, authenticate_api_key_actor
+from bridgecart.auth.models import ApiKey, LoginSession, User, utc_now
 from bridgecart.auth.security import hash_password, token_hash
 from bridgecart.core.config import Settings, get_settings
 from bridgecart.gateway.bootstrap import bootstrap
+from bridgecart.gateway.delegation import issue_delegation
 from bridgecart.gateway.models import ToolAudit, UpstreamServer
 from bridgecart.gateway.security import cipher, validate_header, validate_url
 from bridgecart.gateway.service import Gateway, GatewayFailure, exposed_name
@@ -279,6 +280,117 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
         own = await member_http.get("/audit")
         assert own.status_code == 200
         assert all(row["user_id"] == member_actor.user.id for row in own.json())
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_session_delegation_transport_logout_deactivation_and_audit(
+    database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = Settings(
+        database_url=database_url,
+        gateway_enabled=True,
+        upstream_encryption_key=Fernet.generate_key().decode(),
+        gateway_allowed_urls=",".join(URLS),
+    )
+    app = create_app(settings)
+    gateway = app.state.gateway
+    server = UpstreamServer(
+        id="22222222-2222-2222-2222-222222222222",
+        name="Demo inventory",
+        url=URLS[1],
+        enabled=True,
+        auth_type="none",
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    async with app.state.session_factory() as db:
+        db.add(server)
+        db.add_all(
+            [
+                User(
+                    email="a@example.com", password_hash=hash_password("private-password-A"), role="member", active=True
+                ),
+                User(
+                    email="b@example.com", password_hash=hash_password("private-password-B"), role="member", active=True
+                ),
+            ]
+        )
+        await db.commit()
+
+    async def fake_connect(_server: UpstreamServer, operation: str, *_args: Any) -> Any:
+        if operation == "discover":
+            return [Tool(name="lookup", inputSchema={"type": "object", "properties": {}})]
+        return CallToolResult(content=[TextContent(type="text", text="demo result")])
+
+    monkeypatch.setattr(gateway, "_connect", fake_connect)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as browser_a:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as browser_b:
+            assert (
+                await browser_a.post("/auth/login", json={"email": "a@example.com", "password": "private-password-A"})
+            ).status_code == 200
+            assert (
+                await browser_b.post("/auth/login", json={"email": "b@example.com", "password": "private-password-B"})
+            ).status_code == 200
+            async with app.state.session_factory() as db:
+                session_a = await db.scalar(
+                    select(LoginSession).where(
+                        LoginSession.token_hash == token_hash("session", browser_a.cookies["bridgecart_session"])
+                    )
+                )
+                session_b = await db.scalar(
+                    select(LoginSession).where(
+                        LoginSession.token_hash == token_hash("session", browser_b.cookies["bridgecart_session"])
+                    )
+                )
+                assert session_a and session_b
+                user_a, user_b = await db.get(User, session_a.user_id), await db.get(User, session_b.user_id)
+                assert user_a and user_b
+                token_a = issue_delegation(
+                    settings, SessionActor(user_a, session_a), "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                )
+                token_b = issue_delegation(
+                    settings, SessionActor(user_b, session_b), "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+                )
+            public = exposed_name(server.id, "lookup")
+            async with app.router.lifespan_context(app):
+
+                async def call(token: str) -> CallToolResult:
+                    async with httpx2.AsyncClient(
+                        transport=httpx2.ASGITransport(app=app, client=("127.0.0.1", 123)),
+                        headers={"Authorization": "Bearer " + token},
+                    ) as transport:
+                        async with streamable_http_client(
+                            "http://test/mcp", http_client=transport, terminate_on_close=False
+                        ) as streams:
+                            async with ClientSession(*streams) as client:
+                                await client.initialize()
+                                assert [tool.name for tool in (await client.list_tools()).tools] == [public]
+                                return await client.call_tool(public, {})
+
+                first, second = await asyncio.gather(call(token_a), call(token_b))
+                assert not first.is_error and not second.is_error
+                async with app.state.session_factory() as db:
+                    rows = (await db.scalars(select(ToolAudit).order_by(ToolAudit.id))).all()
+                    assert {row.user_id for row in rows} == {user_a.id, user_b.id}
+                    assert {row.correlation_id for row in rows} == {
+                        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                    }
+                    assert all(row.credential_type == "session_delegation" and row.api_key_id is None for row in rows)
+                assert (
+                    await browser_a.post("/auth/logout", headers={"X-CSRF-Token": browser_a.cookies["bridgecart_csrf"]})
+                ).status_code == 200
+                with pytest.raises(ExceptionGroup):
+                    await call(token_a)
+                assert not (await call(token_b)).is_error
+                async with app.state.session_factory() as db:
+                    user_b_row = await db.get(User, user_b.id)
+                    assert user_b_row
+                    user_b_row.active = False
+                    await db.commit()
+                with pytest.raises(ExceptionGroup):
+                    await call(token_b)
     await app.state.engine.dispose()
 
 
