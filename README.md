@@ -1,6 +1,6 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway for WooCommerce. Milestone five adds a React operations dashboard for the existing team API, upstream registry, API keys, and audit logs. LLM chat remains future work.
+BridgeCart is a team MCP gateway for WooCommerce. The React dashboard includes session-authenticated Claude chat; every tool call goes through the existing user-attributed MCP gateway.
 
 ## Local store
 
@@ -21,6 +21,7 @@ make backend-live-verify  # live admin/member flow and backend pod replacement
 make gateway-verify  # seven tools across three upstreams and two-user audit attribution
 make gateway-outage-verify  # controlled shipping outage, then automatic restoration
 make gateway-network-verify  # owned temporary Pod tests denied network paths
+make anthropic-secret  # enter the local provider key with hidden input
 make dashboard-deploy  # build/import frontend and updated backend; preserve store and PVCs
 make dashboard-status
 make dashboard-smoke
@@ -44,7 +45,7 @@ The local demo is made public and uses Shop as its homepage on its first bootstr
 
 Run `make check` for existing frontend/backend/MCP checks and Helm lint/template. The local-path PVCs survive pod replacement and are retained on Helm uninstall, but are tied to their k3d node and do not replace backups. Read [architecture](docs/architecture.md), [production](docs/production.md), and the [runbook](docs/runbook.md) before upgrades or cleanup.
 
-For milestone-six preparation, run `make anthropic-secret` in your own interactive terminal to enter `ANTHROPIC_API_KEY` with hidden input. This creates or updates the dedicated local Kubernetes Secret without printing the key. Anthropic injection is opt-in and chat is not implemented; see [local development](docs/local-development.md#anthropic-key-preparation).
+Run `make anthropic-secret` in your own interactive terminal to enter `ANTHROPIC_API_KEY` with hidden input. The local chart references that Secret and selects `claude-sonnet-4-6`; the backend returns a safe 503 for chat if the key is absent. Open [Chat](http://app.bridgecart.local:8088/chat) after `make dashboard-deploy`. See [local development](docs/local-development.md#anthropic-key-and-chat-milestone-six).
 
 Only the backend gateway is exposed at [the local MCP endpoint](http://api.bridgecart.local:8088/mcp). Upstream MCP Services have no public Ingress. The user's gateway API key is separate from each upstream bearer and the WooCommerce REST key. See [gateway setup](docs/local-development.md#gateway-milestone-4b) and [architecture](docs/architecture.md#gateway-milestone-4b).
 
