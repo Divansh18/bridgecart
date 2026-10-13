@@ -175,12 +175,31 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
         denied = await gateway.execute(admin_actor, public_first, {})
         assert denied.is_error
         assert [tool.name for tool in await gateway.list_tools()] == [public_second]
+
+        async def unavailable_connect(
+            server: UpstreamServer, operation: str, name: str = "", args: dict[str, Any] | None = None
+        ) -> Any:
+            if server.id == second and operation == "discover":
+                raise GatewayFailure("upstream_unavailable", "Upstream MCP service is unavailable")
+            return await fake_connect(server, operation, name, args)
+
+        monkeypatch.setattr(gateway, "_connect", unavailable_connect)
+        gateway.invalidate(second)
+        unavailable = await gateway.execute(member_actor, public_second, {})
+        assert unavailable.is_error
+        assert "Upstream MCP service is unavailable" in unavailable.content[0].text
+        monkeypatch.setattr(gateway, "_connect", fake_connect)
+        gateway.invalidate(second)
         await admin_http.delete(f"/servers/{second}", headers={"X-CSRF-Token": csrf})
         assert await gateway.list_tools() == []
         audit_response = await admin_http.get("/audit?per_page=10")
         assert audit_response.status_code == 200
-        assert len(audit_response.json()) == 5
+        assert len(audit_response.json()) == 6
         assert {row["outcome"] for row in audit_response.json()} == {"success", "timeout", "upstream_error", "rejected"}
+        assert any(
+            row["error_category"] == "upstream_unavailable" and row["outcome"] == "upstream_error"
+            for row in audit_response.json()
+        )
         assert {row["user_id"] for row in audit_response.json()} == {admin_actor.user.id, member_actor.user.id}
         assert all("upstream-private" not in str(row) for row in audit_response.json())
 

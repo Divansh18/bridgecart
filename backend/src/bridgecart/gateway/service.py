@@ -249,6 +249,8 @@ class Gateway:
             if not server.enabled:
                 raise GatewayFailure("disabled", "Server is disabled")
             discovery = await self.discover(server)
+            if discovery.status == "Unreachable":
+                raise GatewayFailure("upstream_unavailable", "Upstream MCP service is unavailable")
             original = discovery.tools.get(public)
             if original is None:
                 raise GatewayFailure("unknown_tool", "Tool is unavailable")

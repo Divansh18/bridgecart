@@ -9,7 +9,7 @@ frontend:
     tls: {enabled: true, secretName: replace-with-existing-dashboard-tls-secret}
 backend:
   enabled: true
-  image: registry.example.com/bridgecart/backend:0.7.0
+  image: registry.example.com/bridgecart/backend:0.7.1
   imagePullPolicy: Always
   host: api.example.com
   databaseSecret: replace-with-existing-postgres-secret

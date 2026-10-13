@@ -13,7 +13,7 @@ frontend:
     limits: {cpu: 250m, memory: 128Mi}
 backend:
   enabled: false
-  image: bridgecart/backend:0.7.0
+  image: bridgecart/backend:0.7.1
   imagePullPolicy: IfNotPresent
   host: api.bridgecart.local
   databaseSecret: bridgecart-postgres-credentials
