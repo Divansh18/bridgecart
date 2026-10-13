@@ -157,9 +157,17 @@ export function ChatPage() {
               </div>
             ))}
             {sending && (
-              <p role="status" className="text-sm text-slate-500">
-                Claude is working through the gateway…
-              </p>
+              <div
+                role="status"
+                className="flex items-center gap-2 text-sm text-slate-500"
+              >
+                <span>Thinking…</span>
+                <span className="chat-thinking-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
             )}
           </div>
           <form

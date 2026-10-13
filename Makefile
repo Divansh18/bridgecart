@@ -157,9 +157,9 @@ external-client-verify:
 	backend/.venv/bin/python scripts/verify_external_client.py
 
 dashboard-images:
-	docker build -t bridgecart/frontend:0.7.1 frontend
+	docker build -t bridgecart/frontend:0.7.2 frontend
 	docker build -t bridgecart/backend:0.7.1 backend
-	k3d image import bridgecart/frontend:0.7.1 bridgecart/backend:0.7.1 -c bridgecart
+	k3d image import bridgecart/frontend:0.7.2 bridgecart/backend:0.7.1 -c bridgecart
 
 dashboard-deploy: dashboard-images
 	helm --kube-context k3d-bridgecart upgrade --install bridgecart deploy/helm/bridgecart --namespace bridgecart -f deploy/helm/bridgecart/values-local.yaml --set frontend.enabled=true --set store.bootstrap.enabled=false --wait --timeout 20m

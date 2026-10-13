@@ -1,7 +1,7 @@
 stage: local
 frontend:
   enabled: false
-  image: bridgecart/frontend:0.7.1
+  image: bridgecart/frontend:0.7.2
   imagePullPolicy: IfNotPresent
   host: app.bridgecart.local
   gatewayUrl: http://api.bridgecart.local:8088/mcp
