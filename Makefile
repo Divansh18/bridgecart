@@ -1,4 +1,4 @@
-.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify backend-secrets backend-image backend-deploy backend-status backend-verify backend-live-verify gateway-secrets gateway-images gateway-deploy gateway-status gateway-verify gateway-outage-verify gateway-network-verify dashboard-images dashboard-deploy dashboard-status dashboard-smoke dashboard-live-verify anthropic-secret
+.PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify backend-secrets backend-image backend-deploy backend-status backend-verify backend-live-verify gateway-secrets gateway-images gateway-deploy gateway-status gateway-verify gateway-outage-verify gateway-network-verify external-client-verify dashboard-images dashboard-deploy dashboard-status dashboard-smoke dashboard-live-verify anthropic-secret
 
 PYTHON_PROJECTS := backend services/woocommerce-mcp services/inventory-mcp services/shipping-mcp
 
@@ -47,7 +47,7 @@ helm-check:
 	helm template bridgecart deploy/helm/bridgecart -f deploy/helm/bridgecart/values-prod.yaml > /dev/null
 
 scripts-check:
-	python3 -m py_compile scripts/provision_woocommerce_mcp.py scripts/rotate_woocommerce_mcp_key.py scripts/backend_secrets.py scripts/verify_backend_postgres.py scripts/verify_backend_live.py scripts/local_invite.py scripts/gateway_secrets.py scripts/verify_gateway_live.py scripts/verify_gateway_outage.py scripts/verify_gateway_network.py scripts/dashboard_smoke.py scripts/verify_dashboard_live.py scripts/anthropic_secret.py
+	python3 -m py_compile scripts/provision_woocommerce_mcp.py scripts/rotate_woocommerce_mcp_key.py scripts/backend_secrets.py scripts/verify_backend_postgres.py scripts/verify_backend_live.py scripts/local_invite.py scripts/gateway_secrets.py scripts/verify_gateway_live.py scripts/verify_gateway_outage.py scripts/verify_gateway_network.py scripts/verify_external_client.py scripts/dashboard_smoke.py scripts/verify_dashboard_live.py scripts/anthropic_secret.py
 
 check: lint typecheck format-check test build helm-check scripts-check
 
@@ -149,6 +149,9 @@ gateway-outage-verify:
 
 gateway-network-verify:
 	backend/.venv/bin/python scripts/verify_gateway_network.py
+
+external-client-verify:
+	backend/.venv/bin/python scripts/verify_external_client.py
 
 dashboard-images:
 	docker build -t bridgecart/frontend:0.7.1 frontend
