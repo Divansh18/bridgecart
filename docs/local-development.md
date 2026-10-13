@@ -66,6 +66,22 @@ Assistant replies now render safe Markdown, including GFM tables, links, lists, 
 
 `make check` needs `uv` on PATH. On this workstation, a pinned `uv 0.12.24` binary was installed into `/private/tmp/bridgecart-uv/bin`; the verified command was `PATH=/private/tmp/bridgecart-uv/bin:$PATH UV_CACHE_DIR=/private/tmp/bridgecart-uv-cache make check`. Install `uv` normally for a durable developer setup. `make backend-verify` tests Alembic and delegation against an isolated real PostgreSQL database; `make gateway-verify`, `make dashboard-smoke`, and `make store-smoke` exercise the deployed system without altering existing store records.
 
+## External MCP client acceptance
+
+The Connect page at `http://app.bridgecart.local:8088/connect` advertises the public Streamable HTTP gateway, `http://api.bridgecart.local:8088/mcp`. On this Mac, Claude Code was not installed; the installed, ChatGPT-signed-in Codex CLI 0.160.1 was used as the external LLM client. Codex supports HTTP MCP servers and bearer tokens from environment variables. The verifier passes **only** the public gateway URL and the active member's temporary individual API key to its MCP configuration; it ignores the normal Codex MCP configuration. It does not give Codex any upstream URL or credential.
+
+From the repository root, with the local k3d release running and the existing active `milestone4a-member@bridgecart.local` account plus `bridgecart-demo-member` Secret available:
+
+```sh
+codex --version
+codex login status
+make external-client-verify
+```
+
+If Codex CLI is absent, install it with `npm install -g @openai/codex@latest`, then run `codex login` before the same verification command. The script needs the installed backend Python environment (`make install`), local `kubectl` access to context `k3d-bridgecart`, and the local host mapping for `api.bridgecart.local` to `127.0.0.1`. It selects `gpt-6-luna` for the prompts because the local CLI's default model reported capacity during verification. It creates a new key through member B's session, keeps the raw value only in memory and the short-lived child environment, runs Codex from a temporary directory with `--ephemeral --ignore-user-config`, checks its captured output for the key before printing a safe summary, and revokes the key in `finally`. Do not run `codex mcp add` with the raw key on the command line or paste it into a prompt.
+
+The three Codex prompts list the gateway catalog, query `list_orders(today=true)` (Asia/Kolkata date semantics), and in one request combine seeded inventory SKU `BRIDGECART-DEMO-001` with a standard 1.00 kg estimate for PIN `560001`. They are read-only. The script confirms actual Codex MCP tool-call events and user B audit rows. It then opens a separate SDK MCP session, revokes the key while that session remains open, requires HTTP 401, and checks that its next call fails. This SDK step proves the connection-revocation behavior; the natural-language prompt evidence comes from Codex CLI. Inventory and shipping are deterministic **demo data**, not live stock or carrier quotes. Running this verifier again creates and revokes another test key and adds read-only audit records.
+
 ## MCP service
 
 After the store is ready, run:
