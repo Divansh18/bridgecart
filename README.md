@@ -1,52 +1,130 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway for WooCommerce. The React dashboard includes session-authenticated Claude chat; every tool call goes through the existing user-attributed MCP gateway.
+BridgeCart is a team MCP gateway for a WooCommerce store. A React dashboard provides team login, invitations, API-key management, upstream status and tool schemas, audit logs, and optional Claude chat. External MCP clients use one public gateway URL and an individual team API key. Dashboard chat executes tools through that same gateway as the signed-in user; neither upstream credentials nor the Anthropic key reach the browser.
 
-## Local store
+## Architecture
 
-Install Docker Desktop, k3d, kubectl, Helm, and Python 3.12+. From a fresh checkout:
+| Component | Responsibility |
+| --- | --- |
+| `frontend/` | React, TypeScript, Vite dashboard; same-origin `/api` calls and a public gateway URL in runtime configuration. |
+| `backend/` | FastAPI team API, opaque cookie sessions and CSRF, PostgreSQL/Alembic, encrypted upstream registry, Streamable HTTP gateway, user-attributed audit, and bounded Claude tool loop. |
+| `services/woocommerce-mcp/` | Five product/order tools backed by WooCommerce REST, with separate REST and MCP credentials. |
+| `services/inventory-mcp/`, `services/shipping-mcp/` | Independently deployed, read-only **seeded demo data** tools; no store or database access. |
+| `deploy/helm/bridgecart/` | One chart for local k3d and production k3s: WordPress/WooCommerce, MariaDB, PostgreSQL, backend, frontend, three internal MCP services, Jobs, Ingresses, PVCs, and NetworkPolicies. |
 
-```sh
-make store-cluster
-make store-secrets
-make store-deploy
-make store-status
-make store-smoke
-make mcp-deploy  # creates dedicated API and bearer Secrets, builds/imports image, upgrades Helm
-make install  # local locked dependencies for backend verification helpers
-make gateway-deploy  # PostgreSQL, migration/admin bootstrap, gateway and demo MCP images
-make backend-status
-make backend-verify  # isolated migration and access-flow test against PostgreSQL
-make backend-live-verify  # live admin/member flow and backend pod replacement
-make gateway-verify  # seven tools across three upstreams and two-user audit attribution
-make gateway-outage-verify  # controlled shipping outage, then automatic restoration
-make gateway-network-verify  # owned temporary Pod tests denied network paths
-make anthropic-secret  # enter the local provider key with hidden input
-make dashboard-deploy  # build/import frontend and updated backend; preserve store and PVCs
-make dashboard-status
-make dashboard-smoke
-make dashboard-live-verify  # Playwright admin/member flow; creates deactivated test member
+Traefik exposes the shop, dashboard, and backend API/gateway. MariaDB, PostgreSQL, and upstream MCP services have internal Services only. The gateway owns tool discovery, routing, authorization, and auditing. See [architecture](docs/architecture.md) and [threat model](docs/threat-model.md).
+
+## Fresh-checkout local setup
+
+Install Docker Desktop, k3d 5.9+, kubectl, Helm 3/4, Node 22/npm, Python 3.12+, and `uv`. Allow image pulls and the first WooCommerce plugin download. The [k3d configuration](deploy/k3d/cluster.yaml) maps loopback port **8088** to Traefik and **6550** to the Kubernetes API; the cluster setup script checks existing clusters and port conflicts and never deletes a cluster. Local k3s supplies Traefik, NetworkPolicy enforcement, and `local-path` storage. Check Docker is running, then add this entry to `/etc/hosts` if it is absent:
+
+```text
+127.0.0.1 shop.bridgecart.local api.bridgecart.local app.bridgecart.local
 ```
 
-Add `127.0.0.1 shop.bridgecart.local api.bridgecart.local app.bridgecart.local` to your hosts file if absent. Open [the storefront](http://shop.bridgecart.local:8088/), [WordPress admin](http://shop.bridgecart.local:8088/wp-admin/), [team API](http://api.bridgecart.local:8088/docs), and [dashboard](http://app.bridgecart.local:8088/). WordPress and BridgeCart have separate admin accounts and Secrets; retrieve credentials privately as described in [local development](docs/local-development.md). No credentials are stored in this repository.
+From the repository root, in this order:
 
-`make store-cluster` checks for an existing cluster and occupied ports before creating anything. It never deletes a cluster. `make store-secrets` preserves an existing Secret. `make store-deploy` runs the Helm bootstrap hook; `make store-bootstrap` runs it again to check idempotency. Optional `make store-images` imports the pinned images into k3d when node pulls are unavailable.
+```sh
+make store-cluster       # create/reuse the k3d cluster
+make store-secrets       # generate/preserve private local store credentials
+make store-deploy        # WordPress, MariaDB, PVCs, WooCommerce bootstrap
+make store-smoke
+make install             # npm ci and locked uv environments
+make mcp-deploy          # provision the dedicated WooCommerce API key; build/import its MCP image
+make gateway-deploy      # create/preserve team Secrets; build/import backend and demo MCP images
+make anthropic-secret    # optional: hidden prompt for your Anthropic key; needed only for chat
+make dashboard-deploy    # build/import frontend and backend; enable the dashboard
+make dashboard-status
+make dashboard-smoke
+```
 
-The demo product is **BridgeCart Demo Mug**, SKU `BRIDGECART-DEMO-001`, priced at ₹499. India free shipping and cash on delivery support a test checkout. See [the demo checklist](docs/demo-checklist.md).
-The local demo is made public and uses Shop as its homepage on its first bootstrap; production values leave site visibility and the homepage under administrator control.
+`make store-images` imports the pinned WordPress, WP-CLI, and MariaDB images into k3d if node pulls are unavailable; PostgreSQL must still be pullable or imported separately. The normal bootstrap still needs HTTPS access to download pinned WooCommerce **11.2.1** on first install. Deploy commands are repeatable and preserve existing Secrets and PVCs. `make store-bootstrap` intentionally reruns the idempotent store Job; it does not reset products or orders. See [local development](docs/local-development.md) for failure handling and separate component workflows.
 
-## Repository
+| Local URL | Use |
+| --- | --- |
+| <http://shop.bridgecart.local:8088/> | Guest storefront; Shop is the local demo homepage. |
+| <http://shop.bridgecart.local:8088/wp-admin/> | WordPress/WooCommerce administration. |
+| <http://app.bridgecart.local:8088/> | BridgeCart team dashboard; chat is at `/chat`, Connect at `/connect`. |
+| <http://api.bridgecart.local:8088/docs> | Team API reference. |
+| <http://api.bridgecart.local:8088/mcp> | Public Streamable HTTP gateway for external clients. |
 
-- `frontend/`: React/Vite operations dashboard, deployed through Traefik at `app.bridgecart.local` with same-origin `/api` routing.
-- `backend/`: team API, PostgreSQL migrations, admin upstream registry, and MCP gateway at `/mcp`.
-- `services/`: WooCommerce, seeded inventory, and deterministic shipping MCP services, each deployed internally.
-- `deploy/helm/bridgecart/`: one chart for local k3d and production k3s; values files select environment details.
-- `deploy/k3d/cluster.yaml`: pinned local k3s cluster with Traefik and host port 8088.
+### Private credentials and daily use
 
-Run `make check` for existing frontend/backend/MCP checks and Helm lint/template. The local-path PVCs survive pod replacement and are retained on Helm uninstall, but are tied to their k3d node and do not replace backups. Read [architecture](docs/architecture.md), [production](docs/production.md), and the [runbook](docs/runbook.md) before upgrades or cleanup.
+The local scripts generate distinct Kubernetes Secrets; no default password or real key is in this repository. Run retrieval commands **in your own terminal**, never in chat, logs, or shell history as literal credentials:
 
-Run `make anthropic-secret` in your own interactive terminal to enter `ANTHROPIC_API_KEY` with hidden input. The local chart references that Secret and selects `claude-sonnet-4-6`; the backend returns a safe 503 for chat if the key is absent. Open [Chat](http://app.bridgecart.local:8088/chat) after `make dashboard-deploy`. See [local development](docs/local-development.md#anthropic-key-and-chat-milestone-six).
+```sh
+# WordPress admin: username bridgecart-admin
+kubectl --context k3d-bridgecart -n bridgecart get secret bridgecart-store-credentials -o jsonpath='{.data.wordpress-admin-password}' | base64 --decode; printf '\n'
 
-Only the backend gateway is exposed at [the local MCP endpoint](http://api.bridgecart.local:8088/mcp). Upstream MCP Services have no public Ingress. The user's gateway API key is separate from each upstream bearer and the WooCommerce REST key. See [gateway setup](docs/local-development.md#gateway-milestone-4b) and [architecture](docs/architecture.md#gateway-milestone-4b).
+# BridgeCart team admin: email admin@bridgecart.local
+kubectl --context k3d-bridgecart -n bridgecart get secret bridgecart-initial-admin -o jsonpath='{.data.admin-password}' | base64 --decode; printf '\n'
+```
 
-The team API uses an opaque HttpOnly session cookie and a separate CSRF cookie/header for mutations. Gateway API keys are hashed in PostgreSQL and are never accepted as browser sessions. See [team access setup](docs/local-development.md#team-api-milestone-4a) and [architecture](docs/architecture.md#team-access-milestone-4a).
+`make anthropic-secret` prompts with terminal echo disabled and creates/updates the dedicated `bridgecart-anthropic-api` Secret without printing the key or putting it in Helm values. It is optional; other features remain available without provider configuration. After rotating it, run `kubectl --context k3d-bridgecart -n bridgecart rollout restart deployment/bridgecart-backend` so the backend reads the new environment value. Never use the WordPress password as a team login. Admins invite members through the dashboard; invitation tokens appear once, expire, and have a [private local handoff workflow](docs/local-development.md#team-api-milestone-4a). Team API keys also appear only once and are stored hashed; copy them into a suitable private client secret store.
+
+For the local checkout demo, open the Shop page as a guest, add **BridgeCart Demo Mug** (`BRIDGECART-DEMO-001`, ₹499), and select India free shipping and cash on delivery. The local bootstrap enables these demo settings and makes the store Live; production values do neither. The dashboard uses HttpOnly session cookies and CSRF protection. Admins manage upstreams and members; members manage their own keys. Chat uses that browser session, shows gateway tool traces, and can call tools from more than one upstream. Inventory and shipping answers are seeded demo data, not live stock or carrier quotes. Review a timed-out write in WooCommerce before asking chat or a client to retry it.
+
+### External MCP clients
+
+Create an individual key on the dashboard's **API keys** page, then configure a Streamable HTTP client with only:
+
+- Gateway URL: `http://api.bridgecart.local:8088/mcp`
+- `Authorization: Bearer <YOUR_API_KEY>` supplied through the client's private credential mechanism
+
+Do not give the client an internal upstream URL, WooCommerce REST key, upstream bearer, browser cookie, or Anthropic key. The [Connect page](http://app.bridgecart.local:8088/connect) shows a generic placeholder-only example; exact client configuration formats vary. The [external-client verification notes](docs/local-development.md#external-mcp-client-acceptance) describe the locally tested Codex CLI workflow.
+
+Exposed tool names are `bc_` + the upstream's **32-character immutable UUID hex** + `_` + the first **24 SHA-256 hex characters** of its original tool name (60 ASCII characters). This prevents cross-server name collisions and survives server display-name or URL edits. The stateless gateway cannot push a persistent tool-list change notification: explicitly request `tools/list` after a registry change or outage/recovery. Execution still rechecks enabled status and user/key validity, so a cached disabled tool or revoked key fails on the next call. Dashboard chat rediscovers tools each turn.
+
+## Verification
+
+| Command | What it checks |
+| --- | --- |
+| `make check` | Frontend lint/type/format/tests/build; backend and MCP unit tests; script syntax; local and production Helm lint/template. No live store or provider call. Requires `uv` on `PATH`. |
+| `make backend-verify` | Alembic and team/gateway/delegation integration tests in a **temporary isolated real PostgreSQL database**; drops only that test database. |
+| `make backend-live-verify` | Live admin/member/session/key flow and backend pod replacement; retains a named demo member and test metadata. |
+| `make store-smoke` | Read-only HTTP checks of the deployed store, product, cart, and admin login path; does not complete checkout. |
+| `make dashboard-smoke` | Deployed SPA routes, runtime config, and unauthenticated API routing; no login flow. |
+| `make gateway-verify` | External SDK connection, three-upstream tool listing/calls, authentication and two-user audit; creates then revokes temporary API keys and adds audit rows. |
+| `make gateway-network-verify` | Owned temporary Pod probes for denied database/upstream paths; removes only its probe Pod. |
+| `make external-client-verify` | Read-only natural-language prompts through a locally installed, signed-in Codex CLI plus SDK revocation check; creates/revokes a temporary member key and adds audit rows. |
+| `make dashboard-live-verify` | Playwright admin/member flows, one-time key display, server status, and audit; creates/deactivates a test member and restores the demo upstream. |
+| `make server-control-verify` | Authenticated disable/restore and owned Shipping pod/outage recovery; intentionally disrupts that demo upstream briefly and restores it. |
+
+The [demo checklist](docs/demo-checklist.md) separates agent-run live checks, deterministic tests, and user-reported manual checkout. It records retained test products/orders and safe cleanup boundaries. Do not treat `make check` as evidence of a live deployment or a completed purchase.
+
+## VPS/k3s deployment
+
+The same chart renders with [`values-prod.yaml`](deploy/helm/bridgecart/values-prod.yaml), which is a **review template, not a deployed production configuration**. Replace every example hostname, image, Secret name, TLS Secret, and storage class. Point DNS for the shop, API, and dashboard hosts to the VPS/Traefik entrypoint; provide HTTPS certificates and `Secure` session cookies. Verify the target CNI enforces NetworkPolicies and Traefik supplies the Middleware/ServersTransport CRDs. Choose durable ReadWriteOnce storage and tested backups for MariaDB, PostgreSQL, and WordPress content. Provision production Secrets privately through an operator or secret manager; do not run local Secret generators or put values in Helm flags.
+
+Build the five custom images from `frontend/`, `backend/`, and each `services/*-mcp/` directory for the VPS node architecture, publish them to an accessible registry, and replace the `registry.example.com` image references with immutable reviewed tags or digests. For example, after a private `docker login`, set `REGISTRY`, `TAG`, and `TARGET_PLATFORM` for your registry and node, then run:
+
+```sh
+for component in frontend backend; do
+  docker buildx build --platform "$TARGET_PLATFORM" --push \
+    -t "$REGISTRY/bridgecart/$component:$TAG" "$component"
+done
+for service in woocommerce-mcp inventory-mcp shipping-mcp; do
+  docker buildx build --platform "$TARGET_PLATFORM" --push \
+    -t "$REGISTRY/bridgecart/$service:$TAG" "services/$service"
+done
+```
+
+Set all five corresponding image values to these published references. k3d uses `docker build` plus `k3d image import` through the Makefile; production nodes must instead be able to pull the published images. The pinned public WordPress, WP-CLI, MariaDB, and PostgreSQL images must also be pullable or preloaded. Before enabling backend on a fresh cluster, install the store and PostgreSQL first, then run the full upgrade so the Alembic migration Job can connect:
+
+```sh
+helm upgrade --install bridgecart deploy/helm/bridgecart -n bridgecart --create-namespace \
+  -f deploy/helm/bridgecart/values-prod.yaml \
+  --set backend.enabled=false --set backend.gateway.enabled=false \
+  --set frontend.enabled=false --set woocommerceMcp.enabled=false \
+  --set inventoryMcp.enabled=false --set shippingMcp.enabled=false --wait
+helm upgrade --install bridgecart deploy/helm/bridgecart -n bridgecart \
+  -f deploy/helm/bridgecart/values-prod.yaml --wait
+```
+
+These are **documented steps only**; this repository has not been verified on a VPS. Validate rendered charts and actual DNS, ingress/TLS, storage, Secret references, network paths, and backups on the target cluster before accepting traffic. See [production guidance](docs/production.md) and the [runbook](docs/runbook.md). Helm rollback restores manifests and image references, **not** Alembic, WooCommerce/plugin or MariaDB migrations, product/order writes, credentials, or audit changes. Back up data and the matching upstream Fernet key before upgrades. Plugin upgrades require an explicit reviewed version change and `allowPluginUpgrade` setting; downgrades are rejected by bootstrap.
+
+## Limits and further detail
+
+Local HTTP, three single-node `local-path` PVCs, one replica per database and backend, and an in-memory login limiter are suitable for a demo, not high availability. Inventory and shipping are deterministic examples, not integrations with stock or carriers. Chat requires a separately supplied Anthropic key and network access; it has bounded turns and browser-memory-only history. A gateway discovery cache can briefly show stale metadata, while execution checks server state again. Public HTTPS egress for Claude and WordPress update checks cannot be narrowed to a hostname with ordinary Kubernetes NetworkPolicy. Retained PVCs survive Helm uninstall but **do not replace backups**.
+
+Implemented usability additions include safe Markdown replies with mobile-scrollable tables, visible audited tool traces, a reduced-motion-aware chat pending indicator, and a bounded Kubernetes WordPress scheduled-action runner. For operational detail, use [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [local development](docs/local-development.md), [production](docs/production.md), [runbook](docs/runbook.md), and [verification history](docs/demo-checklist.md).
