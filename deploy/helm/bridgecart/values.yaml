@@ -1,7 +1,7 @@
 stage: local
 frontend:
   enabled: false
-  image: bridgecart/frontend:0.7.2
+  image: bridgecart/frontend:0.7.3
   imagePullPolicy: IfNotPresent
   host: app.bridgecart.local
   gatewayUrl: http://api.bridgecart.local:8088/mcp
@@ -13,7 +13,7 @@ frontend:
     limits: {cpu: 250m, memory: 128Mi}
 backend:
   enabled: false
-  image: bridgecart/backend:0.7.1
+  image: bridgecart/backend:0.7.2
   imagePullPolicy: IfNotPresent
   host: api.bridgecart.local
   databaseSecret: bridgecart-postgres-credentials
@@ -27,6 +27,7 @@ backend:
     model: ""
   gateway:
     enabled: false
+    allowPublicHttps: false
     encryptionSecret: bridgecart-upstream-encryption
     allowedUrls:
       - http://bridgecart-woocommerce-mcp:8001/mcp

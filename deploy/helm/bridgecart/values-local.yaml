@@ -9,6 +9,7 @@ backend:
     model: claude-sonnet-4-6
   gateway:
     enabled: true
+    allowPublicHttps: true
   host: api.bridgecart.local
   cookieSecure: false
   cookieSameSite: lax

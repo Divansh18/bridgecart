@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     gateway_enabled: bool = False
     upstream_encryption_key: SecretStr | None = None
     gateway_allowed_urls: str = ""
+    gateway_allow_public_https: bool = False
     gateway_discovery_timeout: float = Field(default=5, gt=0, le=30)
     gateway_call_timeout: float = Field(default=12, gt=0, le=60)
     gateway_cache_seconds: float = Field(default=15, ge=0, le=300)

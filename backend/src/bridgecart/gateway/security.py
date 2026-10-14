@@ -32,6 +32,19 @@ FORBIDDEN_HEADERS = {
 }
 
 
+def _public_https_destination(host: str, scheme: str, port: int | None) -> bool:
+    labels = host.split(".")
+    return (
+        scheme == "https"
+        and port in (None, 443)
+        and len(labels) >= 2
+        and not host.endswith(
+            (".local", ".localhost", ".internal", ".svc", ".cluster.local", ".test", ".invalid", ".example", ".arpa")
+        )
+        and all(len(label) <= 63 and re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label) for label in labels)
+    )
+
+
 def validate_url(value: str, settings: Settings) -> str:
     try:
         parsed = urlsplit(value)
@@ -42,19 +55,24 @@ def validate_url(value: str, settings: Settings) -> str:
             pass
         else:
             raise HTTPException(422, "IP-literal upstream URLs are forbidden")
-        safe = (
+        internal = (
             parsed.scheme in {"http", "https"}
-            and bool(host)
-            and host != "localhost"
             and host.split(".")[0].endswith("-mcp")
             and bool(re.fullmatch(r"[a-z0-9.-]+", host))
             and parsed.port is not None
+            and parsed.path == "/mcp"
+            and value in settings.gateway_allowed_urls.split(",")
+        )
+        public = settings.gateway_allow_public_https and _public_https_destination(host, parsed.scheme, parsed.port)
+        safe = (
+            bool(host)
+            and host != "localhost"
             and parsed.username is None
             and parsed.password is None
-            and parsed.path == "/mcp"
+            and parsed.path not in ("", "/")
             and not parsed.query
             and not parsed.fragment
-            and value in settings.gateway_allowed_urls.split(",")
+            and (internal or public)
         )
     except ValueError:
         safe = False

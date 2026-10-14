@@ -1,7 +1,7 @@
 stage: production
 frontend:
   enabled: true
-  image: registry.example.com/bridgecart/frontend:0.7.2
+  image: registry.example.com/bridgecart/frontend:0.7.3
   imagePullPolicy: Always
   host: app.example.com
   gatewayUrl: https://api.example.com/mcp
@@ -9,7 +9,7 @@ frontend:
     tls: {enabled: true, secretName: replace-with-existing-dashboard-tls-secret}
 backend:
   enabled: true
-  image: registry.example.com/bridgecart/backend:0.7.1
+  image: registry.example.com/bridgecart/backend:0.7.2
   imagePullPolicy: Always
   host: api.example.com
   databaseSecret: replace-with-existing-postgres-secret
@@ -19,6 +19,7 @@ backend:
   corsOrigins: https://app.example.com
   gateway:
     enabled: true
+    allowPublicHttps: true
     encryptionSecret: replace-with-existing-upstream-encryption-secret
     allowedUrls:
       - http://bridgecart-woocommerce-mcp:8001/mcp

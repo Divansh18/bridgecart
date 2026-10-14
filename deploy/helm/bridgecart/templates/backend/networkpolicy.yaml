@@ -83,8 +83,8 @@ spec:
       ports: [{protocol: TCP, port: {{ .port }}}]
     {{- end }}
     {{- end }}
-    {{- if .Values.backend.anthropic.enabled }}
-    # Standard NetworkPolicy cannot restrict this public HTTPS rule to Anthropic DNS names.
+    {{- if or .Values.backend.anthropic.enabled (and .Values.backend.gateway.enabled .Values.backend.gateway.allowPublicHttps) }}
+    # Standard NetworkPolicy cannot restrict public HTTPS egress to Anthropic or registered MCP DNS names.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

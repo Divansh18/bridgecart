@@ -314,11 +314,11 @@ function ServerEditor({
         className="mx-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
       >
         <h2 id="server-editor-title" className="text-xl font-semibold">
-          {fresh ? "Add approved server" : `Edit ${current?.name}`}
+          {fresh ? "Add MCP server" : `Edit ${current?.name}`}
         </h2>
         <p className="mt-2 text-sm text-slate-500">
-          Upstream URLs must be preapproved in gateway configuration. Stored
-          credentials are never displayed.
+          Use a public HTTPS URL on port 443, or an internal URL approved in
+          gateway configuration. Stored credentials are never displayed.
         </p>
         {error && (
           <div className="mt-5">
@@ -336,8 +336,8 @@ function ServerEditor({
             />
           </Field>
           <Field
-            label="Internal MCP URL"
-            hint="Use an approved cluster Service URL ending in /mcp."
+            label="MCP URL"
+            hint="Public HTTPS or an approved cluster Service URL."
           >
             <input
               className={inputClass}

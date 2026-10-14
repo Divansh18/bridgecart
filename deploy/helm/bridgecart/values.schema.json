@@ -186,6 +186,7 @@
             "enabled",
             "encryptionSecret",
             "allowedUrls",
+            "allowPublicHttps",
             "extraEgress"
           ],
           "properties": {
@@ -205,6 +206,9 @@
                 "type": "string",
                 "pattern": "^https?://[a-z0-9.-]+:[0-9]+/mcp$"
               }
+            },
+            "allowPublicHttps": {
+              "type": "boolean"
             },
             "extraEgress": {
               "type": "array",
