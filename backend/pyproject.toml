@@ -28,6 +28,7 @@ packages = ["src/bridgecart"]
 [tool.ruff]
 target-version = "py312"
 line-length = 120
+extend-exclude = ["services"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -37,7 +38,9 @@ python_version = "3.12"
 strict = true
 packages = ["bridgecart"]
 mypy_path = "src"
+exclude = "services"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+norecursedirs = ["services", ".venv"]

@@ -1,6 +1,6 @@
 .PHONY: install frontend backend mcp-woocommerce mcp-inventory mcp-shipping lint typecheck format-check test build helm-check scripts-check check store-cluster store-secrets store-images store-deploy store-bootstrap store-status store-smoke store-admin-rotate mcp-secrets mcp-image mcp-deploy mcp-status mcp-verify backend-secrets backend-image backend-deploy backend-status backend-verify backend-live-verify gateway-secrets gateway-images gateway-deploy gateway-status gateway-verify gateway-outage-verify gateway-network-verify external-client-verify server-control-verify dashboard-images dashboard-deploy dashboard-status dashboard-smoke dashboard-live-verify anthropic-secret
 
-PYTHON_PROJECTS := backend services/woocommerce-mcp services/inventory-mcp services/shipping-mcp
+PYTHON_PROJECTS := backend backend/services/woocommerce-mcp backend/services/inventory-mcp backend/services/shipping-mcp
 
 install:
 	cd frontend && npm ci
@@ -13,13 +13,13 @@ backend:
 	cd backend && uv run --locked uvicorn bridgecart.main:app --reload --host 127.0.0.1 --port 8000
 
 mcp-woocommerce:
-	cd services/woocommerce-mcp && uv run --locked python -m woocommerce_mcp.server
+	cd backend/services/woocommerce-mcp && uv run --locked python -m woocommerce_mcp.server
 
 mcp-inventory:
-	cd services/inventory-mcp && uv run --locked python -m inventory_mcp.server
+	cd backend/services/inventory-mcp && uv run --locked python -m inventory_mcp.server
 
 mcp-shipping:
-	cd services/shipping-mcp && uv run --locked python -m shipping_mcp.server
+	cd backend/services/shipping-mcp && uv run --locked python -m shipping_mcp.server
 
 lint:
 	cd frontend && npm run lint
@@ -86,7 +86,7 @@ mcp-secrets:
 	python3 scripts/provision_woocommerce_mcp.py
 
 mcp-image:
-	docker build -t bridgecart/woocommerce-mcp:0.3.4 services/woocommerce-mcp
+	docker build -t bridgecart/woocommerce-mcp:0.3.4 backend/services/woocommerce-mcp
 	k3d image import bridgecart/woocommerce-mcp:0.3.4 -c bridgecart
 
 mcp-deploy: mcp-secrets mcp-image
@@ -126,8 +126,8 @@ gateway-secrets:
 	backend/.venv/bin/python scripts/gateway_secrets.py
 
 gateway-images: backend-image
-	docker build -t bridgecart/inventory-mcp:0.5.0 services/inventory-mcp
-	docker build -t bridgecart/shipping-mcp:0.5.0 services/shipping-mcp
+	docker build -t bridgecart/inventory-mcp:0.5.0 backend/services/inventory-mcp
+	docker build -t bridgecart/shipping-mcp:0.5.0 backend/services/shipping-mcp
 	k3d image import bridgecart/inventory-mcp:0.5.0 bridgecart/shipping-mcp:0.5.0 -c bridgecart
 
 gateway-deploy: backend-secrets gateway-secrets gateway-images

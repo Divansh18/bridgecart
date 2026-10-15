@@ -8,8 +8,8 @@ BridgeCart is a team MCP gateway for a WooCommerce store. A React dashboard prov
 | --- | --- |
 | `frontend/` | React, TypeScript, Vite dashboard; same-origin `/api` calls and a public gateway URL in runtime configuration. |
 | `backend/` | FastAPI team API, opaque cookie sessions and CSRF, PostgreSQL/Alembic, encrypted upstream registry, Streamable HTTP gateway, user-attributed audit, and bounded Claude tool loop. |
-| `services/woocommerce-mcp/` | Five product/order tools backed by WooCommerce REST, with separate REST and MCP credentials. |
-| `services/inventory-mcp/`, `services/shipping-mcp/` | Independently deployed, read-only **seeded demo data** tools; no store or database access. |
+| `backend/services/woocommerce-mcp/` | Independent MCP project with five product/order tools backed by WooCommerce REST, with separate REST and MCP credentials. |
+| `backend/services/inventory-mcp/`, `backend/services/shipping-mcp/` | Independent MCP projects with read-only **seeded demo data** tools; no store or database access. |
 | `deploy/helm/bridgecart/` | One chart for local k3d and production k3s: WordPress/WooCommerce, MariaDB, PostgreSQL, backend, frontend, three internal MCP services, Jobs, Ingresses, PVCs, and NetworkPolicies. |
 
 Traefik exposes the shop, dashboard, and backend API/gateway. MariaDB, PostgreSQL, and upstream MCP services have internal Services only. The gateway owns tool discovery, routing, authorization, and auditing. See [architecture](docs/architecture.md) and [threat model](docs/threat-model.md).
@@ -96,7 +96,7 @@ The [demo checklist](docs/demo-checklist.md) separates agent-run live checks, de
 
 The same chart renders with [`values-prod.yaml`](deploy/helm/bridgecart/values-prod.yaml), which is a **review template, not a deployed production configuration**. Replace every example hostname, image, Secret name, TLS Secret, and storage class. Point DNS for the shop, API, and dashboard hosts to the VPS/Traefik entrypoint; provide HTTPS certificates and `Secure` session cookies. Verify the target CNI enforces NetworkPolicies and Traefik supplies the Middleware/ServersTransport CRDs. Choose durable ReadWriteOnce storage and tested backups for MariaDB, PostgreSQL, and WordPress content. Provision production Secrets privately through an operator or secret manager; do not run local Secret generators or put values in Helm flags.
 
-Build the five custom images from `frontend/`, `backend/`, and each `services/*-mcp/` directory for the VPS node architecture, publish them to an accessible registry, and replace the `registry.example.com` image references with immutable reviewed tags or digests. For example, after a private `docker login`, set `REGISTRY`, `TAG`, and `TARGET_PLATFORM` for your registry and node, then run:
+Build the five custom images from `frontend/`, `backend/`, and each independent `backend/services/*-mcp/` directory for the VPS node architecture, publish them to an accessible registry, and replace the `registry.example.com` image references with immutable reviewed tags or digests. For example, after a private `docker login`, set `REGISTRY`, `TAG`, and `TARGET_PLATFORM` for your registry and node, then run:
 
 ```sh
 for component in frontend backend; do
@@ -105,7 +105,7 @@ for component in frontend backend; do
 done
 for service in woocommerce-mcp inventory-mcp shipping-mcp; do
   docker buildx build --platform "$TARGET_PLATFORM" --push \
-    -t "$REGISTRY/bridgecart/$service:$TAG" "services/$service"
+    -t "$REGISTRY/bridgecart/$service:$TAG" "backend/services/$service"
 done
 ```
 

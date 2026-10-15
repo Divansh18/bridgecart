@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def provisioner() -> ModuleType:

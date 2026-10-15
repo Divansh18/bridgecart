@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [backend, services/woocommerce-mcp, services/inventory-mcp, services/shipping-mcp]
+        project: [backend, backend/services/woocommerce-mcp, backend/services/inventory-mcp, backend/services/shipping-mcp]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
