@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
-    "test:chat": "node --import tsx --test src/features/chat/AssistantMarkdown.test.tsx",
+    "test": "node --import tsx --test src/features/auth/logout.test.ts src/features/chat/AssistantMarkdown.test.tsx",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

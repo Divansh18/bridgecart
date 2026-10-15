@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -25,6 +25,7 @@ import {
 } from "@/components/Feedback";
 import { AuditPage } from "@/features/audit/AuditPage";
 import { AuthScreens } from "@/features/auth/AuthScreens";
+import { attemptLogout } from "@/features/auth/logout";
 import { KeysPage } from "@/features/api-keys/KeysPage";
 import { MembersPage } from "@/features/members/MembersPage";
 import { ServersPage } from "@/features/servers/ServersPage";
@@ -74,6 +75,9 @@ export function App() {
   const [checking, setChecking] = useState(true);
   const [initialError, setInitialError] = useState("");
   const [expired, setExpired] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const logoutInFlight = useRef(false);
   const [page, setPage] = useState<Page>(pathPage);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [servers, setServers] = useState<Server[]>([]);
@@ -125,6 +129,7 @@ export function App() {
     const onExpired = () => {
       setUser(null);
       setExpired(true);
+      setLogoutError("");
       setServers([]);
       setRecent([]);
     };
@@ -153,15 +158,24 @@ export function App() {
     window.scrollTo(0, 0);
   }
   async function logout() {
+    if (logoutInFlight.current) return;
+    logoutInFlight.current = true;
+    setLogoutBusy(true);
+    setLogoutError("");
     try {
-      await endpoints.logout();
-    } catch {
-      /* Clear local display even if the session expired. */
+      const outcome = await attemptLogout(endpoints.logout);
+      if (!outcome.confirmed) {
+        setLogoutError(outcome.message);
+        return;
+      }
+      setUser(null);
+      setServers([]);
+      setRecent([]);
+      history.replaceState(null, "", "/login");
+    } finally {
+      logoutInFlight.current = false;
+      setLogoutBusy(false);
     }
-    setUser(null);
-    setServers([]);
-    setRecent([]);
-    history.replaceState(null, "", "/login");
   }
   if (checking)
     return (
@@ -246,10 +260,17 @@ export function App() {
           <Button
             className="mt-4 w-full justify-start"
             variant="outline"
+            disabled={logoutBusy}
             onClick={() => void logout()}
           >
-            <LogOut className="size-4" /> Sign out
+            <LogOut className="size-4" />{" "}
+            {logoutBusy ? "Signing out…" : "Sign out"}
           </Button>
+          {logoutError && (
+            <p role="alert" className="mt-2 px-2 text-xs text-red-700">
+              {logoutError}
+            </p>
+          )}
         </div>
       </aside>
       <div className="min-w-0">
