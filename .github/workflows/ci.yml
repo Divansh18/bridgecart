@@ -14,7 +14,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - run: npm run lint && npm run typecheck && npm run format:check && npm run build
+      - run: npm run lint && npm run typecheck && npm run format:check && npm run test && npm run build
         working-directory: frontend
   python:
     runs-on: ubuntu-latest
@@ -51,7 +51,15 @@ jobs:
           python-version: '3.12'
       - run: uv sync --locked
         working-directory: backend
-      - run: uv run --locked pytest -q tests/integration/test_team_access_postgres.py
+      - run: |
+          uv run --locked pytest -q tests/integration/test_team_access_postgres.py tests/integration/test_gateway_postgres.py --junitxml=postgres-tests.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('postgres-tests.xml').getroot()
+          suites = [root] if root.tag == 'testsuite' else list(root.iter('testsuite'))
+          assert sum(int(suite.get('tests', '0')) for suite in suites) >= 5, 'PostgreSQL tests were not collected'
+          assert sum(int(suite.get('skipped', '0')) for suite in suites) == 0, 'PostgreSQL tests were skipped'
+          PY
         working-directory: backend
         env:
           BRIDGECART_TEST_DATABASE_URL: postgresql+asyncpg://bridgecart@127.0.0.1:5432/postgres
