@@ -1,12 +1,16 @@
-"""Fail-closed audit behavior without any upstream dispatch."""
+"""Audit persistence, cancellation, and bounded transport behavior."""
+
+import asyncio
 
 import httpx2
 import pytest
+from mcp.types import CallToolResult, TextContent, Tool
 
 from bridgecart.auth.dependencies import ApiKeyActor
 from bridgecart.auth.models import ApiKey, User
 from bridgecart.core.config import Settings
-from bridgecart.gateway.service import Gateway
+from bridgecart.gateway.models import ToolAudit, UpstreamServer
+from bridgecart.gateway.service import Discovery, Gateway, GatewayFailure, exposed_name
 from bridgecart.gateway.transport import (
     MAX_WIRE_BYTES,
     LimitedStream,
@@ -82,6 +86,113 @@ async def test_authentication_database_failure_has_safe_error() -> None:
     result = await gateway.execute(ApiKeyActor(user=user, key=key), "unknown", {})
     assert result.is_error
     assert "secret database" not in result.content[0].text
+
+
+def audit_gateway(monkeypatch: pytest.MonkeyPatch) -> tuple[Gateway, ApiKeyActor, str, list[ToolAudit]]:
+    user = User(id=1, email="member@example.com", password_hash="unused", role="member", active=True)
+    key = ApiKey(id=2, user_id=1, created_by=1, name="test", token_hash="unused", prefix="bck_")
+    server = UpstreamServer(
+        id="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        name="Test MCP",
+        url="http://test-mcp:8001/mcp",
+        enabled=True,
+        auth_type="none",
+    )
+    public = exposed_name(server.id, "write_item")
+    audit_rows: list[ToolAudit] = []
+    sessions = 0
+
+    class Session:
+        def __init__(self, number: int) -> None:
+            self.number = number
+
+        async def __aenter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        async def __aexit__(self, *_args):  # type: ignore[no-untyped-def]
+            return None
+
+        async def execute(self, *_args):  # type: ignore[no-untyped-def]
+            class Result:
+                def one_or_none(self):  # type: ignore[no-untyped-def]
+                    return key, user
+
+            return Result()
+
+        async def get(self, model, _identifier):  # type: ignore[no-untyped-def]
+            return server if model is UpstreamServer else audit_rows[0]
+
+        def add(self, row: ToolAudit) -> None:
+            row.id = 1
+            audit_rows.append(row)
+
+        async def commit(self) -> None:
+            if self.number == 5:
+                raise RuntimeError("private database failure")
+
+    def factory() -> Session:
+        nonlocal sessions
+        sessions += 1
+        return Session(sessions)
+
+    gateway = Gateway(Settings(database_url="postgresql+asyncpg://user:pass@localhost/db"), factory)  # type: ignore[arg-type]
+
+    async def discover(_server: UpstreamServer) -> Discovery:
+        tool = Tool(name="write_item", inputSchema={"type": "object", "properties": {}})
+        return Discovery({public: tool}, "Connected", None, 0)
+
+    monkeypatch.setattr(gateway, "discover", discover)
+    return gateway, ApiKeyActor(user, key), public, audit_rows
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("upstream", ["success", "error", "timeout"])
+async def test_audit_finalization_failure_preserves_upstream_outcome(
+    monkeypatch: pytest.MonkeyPatch, upstream: str
+) -> None:
+    gateway, actor, public, audits = audit_gateway(monkeypatch)
+    calls = 0
+
+    async def connect(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        if upstream == "error":
+            raise GatewayFailure("upstream_tool_error", "Upstream tool returned an error")
+        if upstream == "timeout":
+            raise GatewayFailure("timeout", "Upstream timed out; a write may have completed")
+        return CallToolResult(content=[TextContent(type="text", text="item created")])
+
+    monkeypatch.setattr(gateway, "_connect", connect)
+    result = await gateway.execute(actor, public, {})
+    assert result.is_error
+    assert "private database failure" not in result.content[0].text
+    assert "audit finalization" in result.content[0].text.lower()
+    assert calls == 1  # An uncertain write must not be retried.
+    assert audits[0].outcome == {"success": "success", "error": "upstream_error", "timeout": "timeout"}[upstream]
+    if upstream == "success":
+        assert "Upstream reported success" in result.content[0].text
+    elif upstream == "error":
+        assert "Upstream tool returned an error" in result.content[0].text
+    else:
+        assert "may have completed" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_cancellation_propagates_even_when_audit_finalization_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    gateway, actor, public, audits = audit_gateway(monkeypatch)
+    entered = asyncio.Event()
+
+    async def connect(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        entered.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(gateway, "_connect", connect)
+    task = asyncio.create_task(gateway.execute(actor, public, {}))
+    await asyncio.wait_for(entered.wait(), 1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert audits[0].outcome == "interrupted"
 
 
 @pytest.mark.asyncio

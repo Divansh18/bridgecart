@@ -303,14 +303,29 @@ class Gateway:
             outcome, category = "upstream_error", "internal"
             result = safe_result("internal", "Gateway could not complete the call")
         finally:
+            finalization_failed = False
             try:
                 async with self.factory() as db:
                     row = await db.get(ToolAudit, audit_id)
-                    if row:
-                        row.duration_ms = round((time.monotonic() - started) * 1000)
-                        row.outcome = outcome
-                        row.error_category = category
-                        await db.commit()
+                    if row is None:
+                        raise RuntimeError("Audit record disappeared before finalization")
+                    row.duration_ms = round((time.monotonic() - started) * 1000)
+                    row.outcome = outcome
+                    row.error_category = category
+                    await db.commit()
             except Exception:
-                return safe_result("audit_finalize_failed", "Audit finalization failed; call outcome may be uncertain")
+                finalization_failed = True
+        if finalization_failed:
+            if outcome == "success":
+                message = (
+                    "Upstream reported success, but audit finalization failed. "
+                    "Verify the operation before retrying a write."
+                )
+            else:
+                original_error = next(
+                    (block.text for block in result.content if isinstance(block, TextContent)),
+                    "Gateway call failed",
+                )
+                message = original_error + " Audit finalization also failed."
+            return safe_result("audit_finalize_failed", message)
         return result
