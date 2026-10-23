@@ -1,22 +1,23 @@
 # BridgeCart
 
-BridgeCart is a team MCP gateway for a WooCommerce store. A React dashboard provides team login, invitations, API-key management, upstream status and tool schemas, audit logs, and optional Claude chat. External MCP clients use one public gateway URL and an individual team API key. Dashboard chat executes tools through that same gateway as the signed-in user; neither upstream credentials nor the Anthropic key reach the browser.
+BridgeCart is a team MCP gateway for a WooCommerce store on Kubernetes. A React dashboard provides team login, invitations, API-key management, upstream status and tool schemas, audit logs, and optional Claude chat. External MCP clients use one public gateway URL and an individual team API key. Dashboard chat executes tools through that same gateway as the signed-in user; neither upstream credentials nor the Anthropic key reach the browser.
 
 ## Architecture
 
 | Component | Responsibility |
 | --- | --- |
-| `frontend/` | React, TypeScript, Vite dashboard; same-origin `/api` calls and a public gateway URL in runtime configuration. |
-| `backend/` | FastAPI team API, opaque cookie sessions and CSRF, PostgreSQL/Alembic, encrypted upstream registry, Streamable HTTP gateway, user-attributed audit, and bounded Claude tool loop. |
+| `frontend/` | React, TypeScript, Vite, Tailwind CSS, and local shadcn/ui-style components; same-origin `/api` calls and a public gateway URL in runtime configuration. |
+| `backend/` | Python 3.12/FastAPI team API, opaque cookie sessions and CSRF, SQLAlchemy/PostgreSQL/Alembic, encrypted upstream registry, official Python MCP SDK Streamable HTTP gateway, user-attributed audit, and Anthropic SDK Claude tool loop. Dependencies are locked with `uv`. |
 | `backend/services/woocommerce-mcp/` | Independent MCP project with five product/order tools backed by WooCommerce REST, with separate REST and MCP credentials. |
 | `backend/services/inventory-mcp/`, `backend/services/shipping-mcp/` | Independent MCP projects with read-only **seeded demo data** tools; no store or database access. |
 | `deploy/helm/bridgecart/` | One chart for local k3d and production k3s: WordPress/WooCommerce, MariaDB, PostgreSQL, backend, frontend, three internal MCP services, Jobs, Ingresses, PVCs, and NetworkPolicies. |
+| `scripts/`, `docs/`, `.github/workflows/` | Local setup and verification commands, design/operations notes, and CI checks. |
 
 Traefik exposes the shop, dashboard, and backend API/gateway. MariaDB, PostgreSQL, and upstream MCP services have internal Services only. The gateway owns tool discovery, routing, authorization, and auditing. See [architecture](docs/architecture.md) and [threat model](docs/threat-model.md).
 
 ## Fresh-checkout local setup
 
-Install Docker Desktop, k3d 5.9+, kubectl, Helm 3/4, Node 22/npm, Python 3.12+, and `uv`. Allow image pulls and the first WooCommerce plugin download. The [k3d configuration](deploy/k3d/cluster.yaml) maps loopback port **8088** to Traefik and **6550** to the Kubernetes API; the cluster setup script checks existing clusters and port conflicts and never deletes a cluster. Local k3s supplies Traefik, NetworkPolicy enforcement, and `local-path` storage. Check Docker is running, then add this entry to `/etc/hosts` if it is absent:
+Install Docker Desktop, k3d 5.9+, kubectl, Helm 3/4, Node 22/npm, Python **3.12.x**, and `uv` (available on `PATH`). Allow image pulls and the first WooCommerce plugin download. The [k3d configuration](deploy/k3d/cluster.yaml) maps loopback port **8088** to Traefik and **6550** to the Kubernetes API; the cluster setup script checks existing clusters and port conflicts and never deletes a cluster. Local k3s supplies Traefik, NetworkPolicy enforcement, and `local-path` storage. Check Docker is running, then edit `/etc/hosts` with `sudo nano /etc/hosts` and add this entry if it is absent:
 
 ```text
 127.0.0.1 shop.bridgecart.local api.bridgecart.local app.bridgecart.local
@@ -50,15 +51,17 @@ make dashboard-smoke
 
 ### Private credentials and daily use
 
-The local scripts generate distinct Kubernetes Secrets; no default password or real key is in this repository. Run retrieval commands **in your own terminal**, never in chat, logs, or shell history as literal credentials:
+On a fresh installation, the local setup scripts generate distinct random WordPress and team-admin passwords in Kubernetes Secrets. Re-running setup preserves them. The WordPress login is **`bridgecart-admin`**; the dashboard login is **`admin@bridgecart.local`**. Run retrieval commands **in your own terminal**; do not paste the output into chat, logs, files, or Git:
 
 ```sh
-# WordPress admin: username bridgecart-admin
+# WordPress admin password
 kubectl --context k3d-bridgecart -n bridgecart get secret bridgecart-store-credentials -o jsonpath='{.data.wordpress-admin-password}' | base64 --decode; printf '\n'
 
-# BridgeCart team admin: email admin@bridgecart.local
+# BridgeCart team admin password
 kubectl --context k3d-bridgecart -n bridgecart get secret bridgecart-initial-admin -o jsonpath='{.data.admin-password}' | base64 --decode; printf '\n'
 ```
+
+For a **local WordPress password reset**, run `make store-admin-rotate`; it generates a new random password, updates the WordPress account and its Secret, and the first retrieval command then shows the new value privately. It does not accept a chosen passphrase. The team-admin Secret is used **only when the account is first created**: changing that Secret or rerunning `make gateway-deploy` does not reset an existing dashboard password. There is no supported dashboard-admin password reset command in this repository. If either password is changed outside its documented workflow, the corresponding Secret may be stale; do not assume its decoded value will log in.
 
 `make anthropic-secret` prompts with terminal echo disabled and creates/updates the dedicated `bridgecart-anthropic-api` Secret without printing the key or putting it in Helm values. It is optional; other features remain available without provider configuration. After rotating it, run `kubectl --context k3d-bridgecart -n bridgecart rollout restart deployment/bridgecart-backend` so the backend reads the new environment value. Never use the WordPress password as a team login. Admins invite members through the dashboard; invitation tokens appear once, expire, and have a [private local handoff workflow](docs/local-development.md#team-api-milestone-4a). Team API keys also appear only once and are stored hashed; copy them into a suitable private client secret store.
 
