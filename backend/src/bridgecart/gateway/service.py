@@ -3,7 +3,9 @@
 import asyncio
 import hashlib
 import json
+import logging
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +28,7 @@ MAX_TOOLS = 50
 MAX_SCHEMA_BYTES = 65536
 MAX_RESULT_BYTES = 524288
 MAX_ARGUMENT_BYTES = 65536
+logger = logging.getLogger(__name__)
 
 
 class GatewayFailure(Exception):
@@ -206,12 +209,11 @@ class Gateway:
         except Exception:
             return safe_result("authentication_unavailable", "Gateway authentication is unavailable")
         started = time.monotonic()
+        correlation_id = actor.correlation_id if isinstance(actor, DelegatedActor) else str(uuid.uuid4())
         server_id = public[3:35]
         server: UpstreamServer | None = None
         if public.startswith("bc_") and len(server_id) == 32:
             try:
-                import uuid
-
                 server_id = str(uuid.UUID(hex=server_id))
             except ValueError:
                 server_id = ""
@@ -227,7 +229,7 @@ class Gateway:
                     api_key_id=actor.key.id if isinstance(actor, ApiKeyActor) else None,
                     session_id=actor.session_id if isinstance(actor, DelegatedActor) else None,
                     credential_type="session_delegation" if isinstance(actor, DelegatedActor) else "api_key",
-                    correlation_id=actor.correlation_id if isinstance(actor, DelegatedActor) else None,
+                    correlation_id=correlation_id,
                     server_id=server.id if server else None,
                     server_name=server.name if server else None,
                     original_tool_name=None,
@@ -239,6 +241,7 @@ class Gateway:
                 await db.commit()  # Fail closed before any upstream dispatch.
                 audit_id = audit.id
         except Exception:
+            logger.warning("gateway_audit_start_failed correlation_id=%s", correlation_id)
             return safe_result("audit_unavailable", "Audit storage unavailable; call was not dispatched")
 
         outcome = "rejected"
@@ -304,18 +307,27 @@ class Gateway:
             result = safe_result("internal", "Gateway could not complete the call")
         finally:
             finalization_failed = False
+            duration_ms = round((time.monotonic() - started) * 1000)
             try:
                 async with self.factory() as db:
                     row = await db.get(ToolAudit, audit_id)
                     if row is None:
                         raise RuntimeError("Audit record disappeared before finalization")
-                    row.duration_ms = round((time.monotonic() - started) * 1000)
+                    row.duration_ms = duration_ms
                     row.outcome = outcome
                     row.error_category = category
                     await db.commit()
             except Exception:
                 finalization_failed = True
         if finalization_failed:
+            logger.error(
+                "gateway_audit_finalize_failed audit_id=%s correlation_id=%s outcome=%s category=%s duration_ms=%s",
+                audit_id,
+                correlation_id,
+                outcome,
+                category,
+                duration_ms,
+            )
             if outcome == "success":
                 message = (
                     "Upstream reported success, but audit finalization failed. "
@@ -328,4 +340,12 @@ class Gateway:
                 )
                 message = original_error + " Audit finalization also failed."
             return safe_result("audit_finalize_failed", message)
+        logger.info(
+            "gateway_tool_attempt audit_id=%s correlation_id=%s outcome=%s category=%s duration_ms=%s",
+            audit_id,
+            correlation_id,
+            outcome,
+            category,
+            duration_ms,
+        )
         return result

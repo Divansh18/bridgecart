@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+import socket
 from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet
@@ -33,6 +34,13 @@ FORBIDDEN_HEADERS = {
 
 
 def _public_https_destination(host: str, scheme: str, port: int | None) -> bool:
+    try:
+        # libc accepts abbreviated/hex IPv4 forms that ipaddress rejects (for example 127.1).
+        socket.inet_aton(host)
+    except OSError:
+        pass
+    else:
+        return False
     labels = host.split(".")
     return (
         scheme == "https"

@@ -88,7 +88,9 @@ async def test_authentication_database_failure_has_safe_error() -> None:
     assert "secret database" not in result.content[0].text
 
 
-def audit_gateway(monkeypatch: pytest.MonkeyPatch) -> tuple[Gateway, ApiKeyActor, str, list[ToolAudit]]:
+def audit_gateway(
+    monkeypatch: pytest.MonkeyPatch, *, finalization_fails: bool = True
+) -> tuple[Gateway, ApiKeyActor, str, list[ToolAudit]]:
     user = User(id=1, email="member@example.com", password_hash="unused", role="member", active=True)
     key = ApiKey(id=2, user_id=1, created_by=1, name="test", token_hash="unused", prefix="bck_")
     server = UpstreamServer(
@@ -127,7 +129,7 @@ def audit_gateway(monkeypatch: pytest.MonkeyPatch) -> tuple[Gateway, ApiKeyActor
             audit_rows.append(row)
 
         async def commit(self) -> None:
-            if self.number == 5:
+            if self.number == 5 and finalization_fails:
                 raise RuntimeError("private database failure")
 
     def factory() -> Session:
@@ -148,7 +150,7 @@ def audit_gateway(monkeypatch: pytest.MonkeyPatch) -> tuple[Gateway, ApiKeyActor
 @pytest.mark.asyncio
 @pytest.mark.parametrize("upstream", ["success", "error", "timeout"])
 async def test_audit_finalization_failure_preserves_upstream_outcome(
-    monkeypatch: pytest.MonkeyPatch, upstream: str
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, upstream: str
 ) -> None:
     gateway, actor, public, audits = audit_gateway(monkeypatch)
     calls = 0
@@ -169,12 +171,37 @@ async def test_audit_finalization_failure_preserves_upstream_outcome(
     assert "audit finalization" in result.content[0].text.lower()
     assert calls == 1  # An uncertain write must not be retried.
     assert audits[0].outcome == {"success": "success", "error": "upstream_error", "timeout": "timeout"}[upstream]
+    assert "gateway_audit_finalize_failed" in caplog.text
+    assert "private database failure" not in caplog.text
+    assert "item created" not in caplog.text
     if upstream == "success":
         assert "Upstream reported success" in result.content[0].text
     elif upstream == "error":
         assert "Upstream tool returned an error" in result.content[0].text
     else:
         assert "may have completed" in result.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_external_tool_audit_and_logs_have_safe_correlation(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    gateway, actor, public, audits = audit_gateway(monkeypatch, finalization_fails=False)
+
+    async def connect(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        return CallToolResult(content=[TextContent(type="text", text="private result payload")])
+
+    monkeypatch.setattr(gateway, "_connect", connect)
+    with caplog.at_level("INFO", logger="bridgecart.gateway.service"):
+        result = await gateway.execute(actor, public, {"private_argument": "private value"})
+    assert not result.is_error
+    assert audits[0].correlation_id is not None
+    assert len(audits[0].correlation_id) == 36
+    assert audits[0].outcome == "success"
+    assert f"correlation_id={audits[0].correlation_id}" in caplog.text
+    assert "outcome=success" in caplog.text
+    assert "private result payload" not in caplog.text
+    assert "private value" not in caplog.text
 
 
 @pytest.mark.asyncio

@@ -80,6 +80,11 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
     )
     app = create_app(settings)
     gateway = app.state.gateway
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test") as anonymous:
+        assert (await anonymous.post("/mcp", content=b"{}")).status_code == 401
+        assert (
+            await anonymous.post("/mcp", content=b"{}", headers={"Authorization": "Bearer bck_invalid"})
+        ).status_code == 401
     admin_password = "private gateway admin test password"
     member_password = "private gateway member test password"
     raw_admin_key = "bck_" + secrets.token_urlsafe(30)
@@ -201,6 +206,7 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
             for row in audit_response.json()
         )
         assert {row["user_id"] for row in audit_response.json()} == {admin_actor.user.id, member_actor.user.id}
+        assert all(len(row["correlation_id"]) == 36 for row in audit_response.json())
         assert all("upstream-private" not in str(row) for row in audit_response.json())
 
     # SDK client retains its transport; a revoked key must fail on the next POST.
@@ -272,6 +278,18 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
                         assert (await client.list_tools()).tools == []  # explicit refresh on the same SDK session
                         assert (await client.call_tool(public_third, {})).is_error  # cached direct call denied
                     async with app.state.session_factory() as db:
+                        member_row = await db.get(User, member.id)
+                        assert member_row is not None
+                        member_row.active = False
+                        await db.commit()
+                    with pytest.raises(MCPError):
+                        await client.list_tools()
+                    async with app.state.session_factory() as db:
+                        member_row = await db.get(User, member.id)
+                        assert member_row is not None
+                        member_row.active = True
+                        await db.commit()
+                    async with app.state.session_factory() as db:
                         key = await db.scalar(
                             select(ApiKey).where(ApiKey.token_hash == token_hash("api-key", raw_member_key))
                         )
@@ -291,7 +309,15 @@ async def test_registry_routing_cache_audit_and_transport_revocation(
         assert (
             await member_http.post("/auth/login", json={"email": "member@example.com", "password": member_password})
         ).status_code == 200
+        member_csrf = {"X-CSRF-Token": member_http.cookies["bridgecart_csrf"]}
         assert (await member_http.get("/servers")).status_code == 403
+        assert (
+            await member_http.post("/servers", headers=member_csrf, json={"name": "Denied", "url": URLS[2]})
+        ).status_code == 403
+        assert (
+            await member_http.patch(f"/servers/{first}", headers=member_csrf, json={"enabled": True})
+        ).status_code == 403
+        assert (await member_http.delete(f"/servers/{first}", headers=member_csrf)).status_code == 403
         safe_catalog = await member_http.get("/servers/catalog")
         assert safe_catalog.status_code == 200
         assert all("url" not in row and "has_credential" not in row for row in safe_catalog.json())
