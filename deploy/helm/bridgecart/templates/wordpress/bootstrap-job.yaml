@@ -18,6 +18,7 @@ spec:
         {{- include "bridgecart.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: bootstrap
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       affinity:
         podAffinity:
