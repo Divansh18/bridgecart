@@ -21,6 +21,7 @@ spec:
             {{- include "bridgecart.selectorLabels" . | nindent 12 }}
             app.kubernetes.io/component: wordpress-cron
         spec:
+          automountServiceAccountToken: false
           restartPolicy: Never
           terminationGracePeriodSeconds: 15
           affinity:

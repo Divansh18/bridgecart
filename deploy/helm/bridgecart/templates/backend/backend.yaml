@@ -33,6 +33,7 @@ spec:
         {{- include "bridgecart.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

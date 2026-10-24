@@ -65,6 +65,7 @@ spec:
         {{- include "bridgecart.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: mariadb
     spec:
+      automountServiceAccountToken: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault

@@ -50,6 +50,7 @@ spec:
         {{- include "bridgecart.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: wordpress
     spec:
+      automountServiceAccountToken: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault

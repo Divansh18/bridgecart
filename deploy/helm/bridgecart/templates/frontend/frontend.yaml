@@ -43,6 +43,7 @@ spec:
       annotations:
         checksum/config: {{ .Values.frontend.gatewayUrl | sha256sum }}
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
